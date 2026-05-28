@@ -296,7 +296,7 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
       </div>
     </div>
 
-    <button class="btn-go" id="btn-start" onclick="startInventory()" disabled>Iniciar Contagem →</button>
+    <button class="btn-go" id="btn-start" onclick="startInventory(this.dataset.forceNew==='true')" disabled>Iniciar Contagem →</button>
     <p class="login-hint">Rascunhos são salvos automaticamente. Você pode continuar depois.</p>
   </div>
 </div>
@@ -1697,6 +1697,7 @@ function novaContagem(){
   const d=new Date();
   document.getElementById('inp-data').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   document.getElementById('btn-start').disabled=true;
+  document.getElementById('btn-start').dataset.forceNew='true';
   document.getElementById('hdr-session').classList.remove('on');
   document.getElementById('btn-admin').classList.add('gone');
   document.getElementById('btn-nova').classList.add('gone');
@@ -1719,7 +1720,7 @@ function fbKey(){
 }
 
 /* ── START ───────────────────────────────────── */
-async function startInventory(){
+async function startInventory(forceNew){
   nome=document.getElementById('inp-nome').value.trim();
   data=document.getElementById('inp-data').value;
   document.getElementById('hdr-setor').textContent=setor+' — '+nome;
@@ -1728,9 +1729,12 @@ async function startInventory(){
   document.getElementById('btn-admin').classList.remove('gone');
   document.getElementById('btn-nova').classList.remove('gone');
   try{
-    const snap=await db.ref('/inventario/'+fbKey()).get();
-    if(snap.exists()){const v=snap.val();saved=v.itens||{};submitted=v.status==='enviado';}
-    else{saved={};submitted=false;}
+    if(forceNew){saved={};submitted=false;}
+    else{
+      const snap=await db.ref('/inventario/'+fbKey()).get();
+      if(snap.exists()){const v=snap.val();saved=v.itens||{};submitted=v.status==='enviado';}
+      else{saved={};submitted=false;}
+    }
   }catch{saved={};submitted=false;}
   buildList();
   showScreen('inventory');
@@ -1934,7 +1938,11 @@ async function loadAdmin(){
     if(fs) ent=ent.filter(e=>e.setor===fs);
     ent.sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
     if(!ent.length){con.innerHTML='<p style="color:var(--muted);text-align:center;padding:32px">🔍 Nenhum resultado.</p>';return;}
-    con.innerHTML=ent.map(e=>`
+    // store keys in global map to avoid escaping issues
+    window._adminKeys = {};
+    con.innerHTML=ent.map((e,i)=>{
+      window._adminKeys[i]=e._k;
+      return `
       <div class="cnt-card">
         <div class="cnt-info">
           <strong>${e.setor}</strong>
@@ -1943,9 +1951,10 @@ async function loadAdmin(){
         </div>
         <span class="sta ${e.status==='enviado'?'env':'and'}">
           ${e.status==='enviado'?'✅ Enviado':'⏳ Rascunho'}</span>
-        <button class="btn-sm" onclick="exportEntry('${e._k}')">Excel</button>
-        <button class="btn-del" onclick="confirmDelete('${e._k}')" title="Excluir">&#128465;</button>
-      </div>`).join('');
+        <button class="btn-sm" onclick="exportEntry(window._adminKeys[${i}])">Excel</button>
+        <button class="btn-del" onclick="confirmDelete(window._adminKeys[${i}])" title="Excluir">🗑️</button>
+      </div>`;
+    }).join('');
   }catch{con.innerHTML='<p style="color:var(--muted);text-align:center;padding:32px">❌ Erro ao carregar.</p>';}
 }
 
