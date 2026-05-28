@@ -1,0 +1,1925 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Cali Cravings — Contagem de Estoque</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --verde:#2C3E35;--verde-esc:#1e2d26;--verde-med:#3a5244;--verde-clar:#4a6e5a;
+  --areia:#F5F0E8;--areia-med:#EDE7D9;--areia-esc:#DDD4C4;
+  --branco:#fff;--texto:#1e2d26;--muted:#5a7265;--borda:#D6CFC2;
+  --verde-soft:#E8F2EC;--verde-fill:#C8E6D4;
+  --sombra:0 2px 16px rgba(44,62,53,.11);--sombra-lg:0 6px 32px rgba(44,62,53,.18);
+  --r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{-webkit-tap-highlight-color:transparent;}
+body{font-family:'DM Sans',sans-serif;background:var(--areia);color:var(--texto);min-height:100vh;}
+
+/* ─── HEADER ── */
+.hdr{background:var(--verde);color:var(--areia);padding:13px 18px;display:flex;
+  align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 20px rgba(0,0,0,.28);}
+.hdr-logo{display:flex;align-items:center;gap:11px;min-width:0;}
+.hdr-icon{width:38px;height:38px;flex-shrink:0;background:var(--areia);border-radius:9px;
+  display:flex;align-items:center;justify-content:center;}
+.hdr-texts{display:flex;flex-direction:column;min-width:0;}
+.hdr-name{font-family:'Playfair Display',serif;font-size:16px;font-weight:700;
+  letter-spacing:.4px;line-height:1;white-space:nowrap;}
+.hdr-sub{font-size:10px;font-weight:400;opacity:.68;letter-spacing:1.6px;
+  text-transform:uppercase;margin-top:2px;}
+.hdr-right{display:flex;align-items:center;gap:8px;}
+.hdr-info{text-align:right;}
+.hdr-setor{font-size:11px;font-weight:700;line-height:1.3;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hdr-date{font-size:10px;opacity:.65;margin-top:2px;}
+.btn-admin{background:rgba(245,240,232,.15);border:1px solid rgba(245,240,232,.35);
+  border-radius:7px;padding:5px 10px;color:var(--areia);font-family:'DM Sans',sans-serif;
+  font-size:11px;font-weight:600;letter-spacing:.5px;cursor:pointer;white-space:nowrap;
+  transition:background .15s;}
+.btn-admin:hover{background:rgba(245,240,232,.25);}
+
+/* ─── SCREENS ── */
+.screen{display:none;}.screen.active{display:block;}
+
+/* ─── LOGIN ── */
+.login-wrap{padding:28px 18px 40px;max-width:560px;margin:0 auto;}
+.login-hero{text-align:center;margin-bottom:28px;}
+.login-hero-icon{width:76px;height:76px;background:var(--verde);border-radius:18px;
+  display:flex;align-items:center;justify-content:center;margin:0 auto 14px;
+  box-shadow:var(--sombra-lg);}
+.login-hero h1{font-family:'Playfair Display',serif;font-size:24px;color:var(--verde);margin-bottom:5px;}
+.login-hero p{color:var(--muted);font-size:13px;}
+.card{background:var(--branco);border-radius:var(--r);padding:20px;box-shadow:var(--sombra);margin-bottom:14px;}
+.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;
+  color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:7px;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.fld{margin-bottom:12px;}.fld:last-child{margin-bottom:0;}
+label{display:block;font-size:11px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;}
+input[type=text],input[type=date],select{width:100%;padding:9px 13px;
+  border:1.5px solid var(--borda);border-radius:8px;font-size:14px;
+  font-family:'DM Sans',sans-serif;background:var(--areia);color:var(--texto);
+  outline:none;transition:all .2s;-webkit-appearance:none;}
+input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
+.setor-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+.setor-grp{grid-column:1/-1;font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:1.2px;color:var(--muted);padding:7px 0 2px;
+  border-top:1px solid var(--borda);margin-top:3px;}
+.setor-grp:first-child{border-top:none;margin-top:0;padding-top:0;}
+.setor-btn{padding:10px 6px;border:2px solid var(--borda);border-radius:8px;
+  background:var(--areia);color:var(--texto);font-family:'DM Sans',sans-serif;
+  font-size:11.5px;font-weight:500;cursor:pointer;text-align:center;
+  line-height:1.3;transition:all .14s;}
+.setor-btn:hover{border-color:var(--verde-clar);background:var(--verde-soft);}
+.setor-btn.sel{border-color:var(--verde);background:var(--verde);color:var(--areia);font-weight:700;}
+.setor-btn.span2{grid-column:span 2;}
+.btn-go{width:100%;padding:13px;background:var(--verde);color:var(--areia);
+  border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:15px;
+  font-weight:700;cursor:pointer;transition:all .15s;letter-spacing:.3px;}
+.btn-go:hover{background:var(--verde-clar);}
+.btn-go:active{transform:scale(.98);}
+.btn-go:disabled{opacity:.45;cursor:not-allowed;}
+.login-hint{text-align:center;font-size:12px;color:var(--muted);margin-top:14px;}
+
+/* ─── TOOLBAR ── */
+.toolbar{background:var(--verde-esc);padding:9px 14px;display:flex;gap:8px;
+  align-items:center;position:sticky;top:64px;z-index:90;}
+.search-inp{flex:1;padding:8px 13px;border:1.5px solid rgba(255,255,255,.22);
+  border-radius:8px;background:rgba(255,255,255,.1);color:white;
+  font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:all .18s;}
+.search-inp::placeholder{color:rgba(255,255,255,.45);}
+.search-inp:focus{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.45);}
+.btn-gravar{padding:8px 13px;white-space:nowrap;background:rgba(245,240,232,.18);
+  border:1.5px solid rgba(245,240,232,.38);border-radius:8px;color:var(--areia);
+  font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;
+  transition:background .15s;}
+.btn-gravar:hover{background:rgba(245,240,232,.28);}
+
+/* ─── INV BODY ── */
+.inv-body{padding:11px 14px 120px;}
+.prog-row{background:var(--branco);border-radius:9px;padding:10px 14px;
+  margin-bottom:10px;display:flex;align-items:center;gap:10px;box-shadow:var(--sombra);}
+.prog-track{flex:1;height:6px;background:var(--areia-esc);border-radius:3px;overflow:hidden;}
+.prog-fill{height:100%;background:var(--verde);border-radius:3px;transition:width .35s ease;}
+.prog-txt{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;}
+
+/* ─── CATEGORIES ── */
+.cat-sec{background:var(--branco);border-radius:var(--r);margin-bottom:8px;
+  overflow:hidden;box-shadow:0 1px 8px rgba(44,62,53,.07);}
+.cat-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:12px 14px;cursor:pointer;user-select:none;transition:background .13s;}
+.cat-hdr:hover{background:#f9f7f3;}
+.cat-left{display:flex;align-items:center;gap:8px;}
+.cat-lbl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;}
+.cat-badge{font-size:10.5px;padding:2px 8px;border-radius:20px;font-weight:600;
+  background:var(--areia-med);color:var(--muted);transition:all .2s;}
+.cat-badge.lit{background:var(--verde-fill);color:#1a5c36;}
+.cat-chev{width:17px;height:17px;flex-shrink:0;color:var(--muted);transition:transform .2s;}
+.cat-sec.open .cat-chev{transform:rotate(180deg);}
+.cat-body{display:none;border-top:1px solid var(--areia-med);}
+.cat-sec.open .cat-body{display:block;}
+
+/* ─── PRODUCT ROWS ── */
+.p-row{display:flex;align-items:center;padding:8px 14px;gap:9px;
+  border-bottom:1px solid #f0ede8;transition:background .1s;}
+.p-row:last-child{border-bottom:none;}
+.p-row:hover{background:#fdfcfa;}
+.p-row.lit{background:#f0f8f3;}
+.p-info{flex:1;min-width:0;}
+.p-desc{font-size:13px;font-weight:500;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.p-cod{font-size:10.5px;color:var(--muted);margin-top:1px;}
+.p-unit{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.4px;min-width:28px;text-align:center;flex-shrink:0;}
+.qty-inp{width:76px;padding:6px 8px;border:1.5px solid var(--borda);border-radius:7px;
+  font-size:14px;font-family:'DM Sans',sans-serif;text-align:right;background:var(--areia);
+  outline:none;transition:all .18s;flex-shrink:0;}
+.qty-inp:focus{border-color:var(--verde);background:var(--branco);}
+.qty-inp.filled{border-color:#4aaf7d;background:#edf8f2;color:#1a5c36;font-weight:700;}
+.qty-inp::-webkit-inner-spin-button,.qty-inp::-webkit-outer-spin-button{-webkit-appearance:none;}
+.qty-inp{-moz-appearance:textfield;}
+
+/* ─── ACTION BAR ── */
+.action-bar{position:fixed;bottom:0;left:0;right:0;background:var(--branco);
+  border-top:1px solid var(--borda);padding:11px 14px;display:flex;gap:9px;z-index:95;
+  box-shadow:0 -2px 14px rgba(44,62,53,.12);}
+.btn-out{flex:1;padding:12px;border:2px solid var(--verde);border-radius:10px;
+  background:var(--branco);color:var(--verde);font-family:'DM Sans',sans-serif;
+  font-size:13px;font-weight:700;cursor:pointer;transition:all .14s;text-align:center;}
+.btn-out:hover{background:var(--verde-soft);}
+.btn-send{flex:2;padding:12px;background:var(--verde);border:2px solid var(--verde);
+  border-radius:10px;color:var(--areia);font-family:'DM Sans',sans-serif;font-size:13px;
+  font-weight:700;cursor:pointer;transition:background .14s;letter-spacing:.3px;}
+.btn-send:hover{background:var(--verde-clar);}
+.btn-send:disabled{opacity:.45;cursor:not-allowed;}
+
+/* ─── ADMIN ── */
+.admin-wrap{padding:18px 16px 100px;max-width:680px;margin:0 auto;}
+.admin-wrap h2{font-family:'Playfair Display',serif;font-size:21px;margin-bottom:3px;}
+.admin-wrap>p{color:var(--muted);font-size:13px;margin-bottom:18px;}
+.admin-acts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.btn-exp{padding:9px 15px;background:var(--verde);color:var(--areia);border:none;
+  border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;
+  cursor:pointer;display:flex;align-items:center;gap:5px;transition:background .14s;}
+.btn-exp:hover{background:var(--verde-clar);}
+.btn-exp.ghost{background:var(--areia-esc);color:var(--verde);}
+.btn-exp.ghost:hover{background:var(--areia-med);}
+.filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.filters input,.filters select{flex:1;min-width:130px;padding:8px 11px;font-size:13px;}
+.cnt-card{background:var(--branco);border-radius:var(--r);padding:13px 15px;margin-bottom:8px;
+  display:flex;align-items:center;gap:11px;box-shadow:0 1px 6px rgba(44,62,53,.08);}
+.cnt-info{flex:1;min-width:0;}
+.cnt-info strong{font-size:13.5px;display:block;margin-bottom:2px;}
+.cnt-info span{font-size:11.5px;color:var(--muted);display:block;}
+.sta{padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:700;
+  letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;}
+.sta.env{background:var(--verde-fill);color:#1a5c36;}
+.sta.and{background:#fff3cd;color:#856404;}
+.btn-sm{padding:5px 11px;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;
+  border:1.5px solid var(--verde);background:var(--branco);color:var(--verde);
+  transition:all .13s;flex-shrink:0;}
+.btn-sm:hover{background:var(--verde);color:var(--branco);}
+
+/* ─── MODAL ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:150;
+  align-items:center;justify-content:center;}
+.overlay.on{display:flex;}
+.modal{background:var(--branco);border-radius:16px;padding:24px;margin:18px;
+  max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.28);}
+.modal h3{font-family:'Playfair Display',serif;font-size:20px;margin-bottom:8px;}
+.modal p{font-size:13.5px;color:var(--muted);margin-bottom:20px;line-height:1.55;}
+.modal-btns{display:flex;gap:9px;}
+.modal-btns .btn-out,.modal-btns .btn-go{flex:1;padding:11px;}
+
+/* ─── TOAST ── */
+.toast{position:fixed;bottom:86px;left:50%;transform:translateX(-50%) translateY(16px);
+  background:var(--verde);color:var(--areia);padding:9px 20px;border-radius:24px;
+  font-size:13px;font-weight:500;opacity:0;transition:all .28s;z-index:200;
+  white-space:nowrap;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.28);}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ─── BANNER ── */
+.sub-banner{background:#d4ece0;border:1.5px solid #9cd4b8;border-radius:9px;
+  padding:11px 15px;font-size:13px;font-weight:600;color:#1a5c36;
+  text-align:center;margin-bottom:10px;}
+
+.gone{display:none!important;}
+</style>
+</head>
+<body>
+
+<header class="hdr" id="hdr">
+  <div class="hdr-logo">
+    <div class="hdr-icon">
+      <svg viewBox="0 0 36 36" fill="none" width="36" height="36">
+        <path d="M18 5C18 5 10 10.5 10 20C10 25 13.2 29.5 18 31C22.8 29.5 26 25 26 20C26 10.5 18 5 18 5Z" fill="#2C3E35"/>
+        <path d="M18 13C18 13 6 14.5 5 24C8.5 21.5 12.5 20.5 18 20.5" fill="#4a7c5e" opacity=".9"/>
+        <path d="M18 13C18 13 30 14.5 31 24C27.5 21.5 23.5 20.5 18 20.5" fill="#3d6b50" opacity=".85"/>
+        <line x1="18" y1="31" x2="18" y2="35" stroke="#2C3E35" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="hdr-texts">
+      <span class="hdr-name">CALI CRAVINGS</span>
+      <span class="hdr-sub">Contagem de Estoque</span>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-info gone" id="hdr-info">
+      <div class="hdr-setor" id="hdr-setor"></div>
+      <div class="hdr-date" id="hdr-date"></div>
+    </div>
+    <button class="btn-admin gone" id="btn-admin" onclick="toggleAdmin()">⊞ ADMIN</button>
+  </div>
+</header>
+
+<!-- LOGIN -->
+<div id="screen-login" class="screen active">
+  <div class="login-wrap">
+    <div class="login-hero">
+      <div class="login-hero-icon">
+        <svg viewBox="0 0 52 52" fill="none" width="52" height="52">
+          <path d="M26 7C26 7 15 14 15 27C15 34 19.2 39.5 26 41.5C32.8 39.5 37 34 37 27C37 14 26 7 26 7Z" fill="#F5F0E8"/>
+          <path d="M26 17C26 17 8 18.5 6.5 31C11 28 17 26.5 26 26.5" fill="rgba(245,240,232,.55)"/>
+          <path d="M26 17C26 17 44 18.5 45.5 31C41 28 35 26.5 26 26.5" fill="rgba(245,240,232,.45)"/>
+          <line x1="26" y1="41.5" x2="26" y2="47" stroke="#F5F0E8" stroke-width="2.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h1>Cali Cravings</h1>
+      <p>Sistema de Contagem de Estoque</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 Identificação</div>
+      <div class="row2">
+        <div class="fld">
+          <label>Seu Nome</label>
+          <input type="text" id="inp-nome" placeholder="Nome completo" autocomplete="off">
+        </div>
+        <div class="fld">
+          <label>Data da Contagem</label>
+          <input type="date" id="inp-data">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🏢 Selecionar Setor</div>
+      <div class="setor-grid" id="setor-grid">
+        <div class="setor-grp">MASHA</div>
+        <button class="setor-btn" data-s="MASHA COZINHA">MASHA<br>COZINHA</button>
+        <button class="setor-btn" data-s="MASHA BAR">MASHA<br>BAR</button>
+        <button class="setor-btn" data-s="MASHA LIMPEZA">MASHA<br>LIMPEZA</button>
+        <div class="setor-grp">PIER</div>
+        <button class="setor-btn" data-s="PIER COZINHA">PIER<br>COZINHA</button>
+        <button class="setor-btn" data-s="PIER BAR">PIER<br>BAR</button>
+        <button class="setor-btn" data-s="PIER LIMPEZA">PIER<br>LIMPEZA</button>
+        <div class="setor-grp">LINHAS DE PRODUÇÃO</div>
+        <button class="setor-btn" data-s="LINHA 1">LINHA 1</button>
+        <button class="setor-btn" data-s="LINHA 2">LINHA 2</button>
+        <button class="setor-btn" data-s="LINHA 3">LINHA 3</button>
+        <button class="setor-btn" data-s="LINHA 4">LINHA 4</button>
+        <div class="setor-grp">ESTOQUE</div>
+        <button class="setor-btn span2" data-s="ESTOQUE BAR">ESTOQUE BAR</button>
+      </div>
+    </div>
+
+    <button class="btn-go" id="btn-start" onclick="startInventory()" disabled>Iniciar Contagem →</button>
+    <p class="login-hint">Rascunhos são salvos automaticamente. Você pode continuar depois.</p>
+  </div>
+</div>
+
+<!-- INVENTORY -->
+<div id="screen-inventory" class="screen">
+  <div class="toolbar">
+    <input type="text" class="search-inp" id="search-inp"
+      placeholder="🔍  Buscar produto ou código..."
+      oninput="filterProds(this.value)">
+    <button class="btn-gravar" id="btn-gravar" onclick="saveProgress()">💾 Gravar</button>
+  </div>
+  <div class="inv-body" id="inv-body">
+    <div id="sub-banner" class="sub-banner gone">✅ Esta contagem já foi enviada. Somente leitura.</div>
+    <div class="prog-row">
+      <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+      <span class="prog-txt" id="prog-txt">0 / 0</span>
+    </div>
+    <div id="prod-list"></div>
+  </div>
+  <div class="action-bar">
+    <button class="btn-out" onclick="exportSetor()">📥 Exportar</button>
+    <button class="btn-send" id="btn-enviar" onclick="confirmEnvio()">✅ Enviar Contagem</button>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div id="screen-admin" class="screen">
+  <div class="admin-wrap">
+    <h2>Exportar Contagens</h2>
+    <p>Visualize, filtre e exporte as contagens registradas.</p>
+    <div class="admin-acts">
+      <button class="btn-exp" onclick="exportConsolidado()">📊 Exportar Consolidado</button>
+      <button class="btn-exp ghost" onclick="loadAdmin()">🔄 Atualizar</button>
+    </div>
+    <div class="filters">
+      <input type="date" id="f-data" onchange="loadAdmin()">
+      <select id="f-setor" onchange="loadAdmin()">
+        <option value="">Todos os setores</option>
+        <option>MASHA COZINHA</option><option>MASHA BAR</option><option>MASHA LIMPEZA</option>
+        <option>PIER COZINHA</option><option>PIER BAR</option><option>PIER LIMPEZA</option>
+        <option>LINHA 1</option><option>LINHA 2</option><option>LINHA 3</option><option>LINHA 4</option>
+        <option>ESTOQUE BAR</option>
+      </select>
+    </div>
+    <div id="admin-list"></div>
+    <div style="margin-top:16px">
+      <button class="btn-out" style="width:auto;padding:9px 18px" onclick="showScreen('inventory')">← Voltar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3>Enviar Contagem?</h3>
+    <p>A contagem será marcada como finalizada. Você ainda poderá visualizar e exportar os dados.</p>
+    <div class="modal-btns">
+      <button class="btn-out" onclick="closeModal()">Cancelar</button>
+      <button class="btn-go" onclick="submitInventory()">✅ Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── FIREBASE ───────────────────────────────── */
+firebase.initializeApp({
+  apiKey:"AIzaSyDbdgaIEoKn39cjju2IVP83DdP3c1Og6Oo",
+  databaseURL:"https://cozinha-pro-194a7-default-rtdb.firebaseio.com",
+  projectId:"cozinha-pro-194a7"
+});
+const db = firebase.database();
+
+/* ── PRODUCT LIST (1.262 itens) ─────────────── */
+const PRODUCTS = [
+  {cod:"1",desc:"GORJETA 10%",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"3",desc:"TAXA DE ENTREGA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"4",desc:"DIVERSOS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"5",desc:"AGUA SEM GAS",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"6",desc:"AGUA COM GAS",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"8",desc:"COCA COLA",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"9",desc:"COCA ZERO",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"10",desc:"GUARANA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"11",desc:"FANTA LARANJA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"12",desc:"SPRITE",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"13",desc:"SCHWEPPES",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"14",desc:"HEINEKEN LONG NECK",unit:"UN",cat:"CERVEJAS E CHOPPS"},
+  {cod:"16",desc:"CERVEJA PRAYA SEM GLUTEN",unit:"UN",cat:"CERVEJAS E CHOPPS"},
+  {cod:"17",desc:"LAGUNITA LONG NECK",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"24",desc:"ABSOLUT GARRAFA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"28",desc:"CIROC GARRAFA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"30",desc:"GREY GOOSE GARRAFA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"32",desc:"TANQUERAY GARRAFA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"54",desc:"JACK DANIELS GARRAFA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"56",desc:"JIM BEAM GARRAFA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"58",desc:"JOHNNIE WALKER RED GARRAFA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"60",desc:"JOHNNIE WALKER BLACK GARRAFA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"62",desc:"CHIVAS REGAL 12 GARRAFA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"88",desc:"LICOR 43 GARRAFA",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"93",desc:"BOLO MARTHA ROCHA FATIA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"103",desc:"BOLO DE COCO COM DOCE DE LEITE FATIA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"104",desc:"BOLO DE CENOURA COM CHOCOLATE FATIA PROMOÇÃO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"145",desc:"CHEESECAKE POP",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"154",desc:"MACARON UNIDADE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"157",desc:"CINNAMON ROLLS COM CREAM CHEESE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"164",desc:"COOKIE CLASSICO CHOCOLATE CHIP",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"178",desc:"CREME BRULEE INDIVIDUAL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"188",desc:"WAFFLE CLASSICO COM MAPLE SYRUP",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"189",desc:"WAFFLE FRUTAS VERMELHAS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"191",desc:"WAFFLE CHOCOLATE BELGA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"193",desc:"WAFFLE TROPICAL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"194",desc:"WAFFLE MACA E CANELA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"195",desc:"WAFFLE LEMON BLUEBERRY",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"196",desc:"CHICKEN AND WAFFLES",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"197",desc:"WAFFLE BACON E OVO POCHE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"198",desc:"WAFFLE CAPRESE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"199",desc:"WAFFLE PARMA E BURRATA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"200",desc:"WAFFLE COGUMELOS E BRIE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"201",desc:"WAFFLE NORDESTINO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"207",desc:"BERRY BOWL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"208",desc:"TROPICAL BOWL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"210",desc:"ACAI BOWL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"212",desc:"CAESAR SALAD CLASSICA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"213",desc:"GREEK SALAD",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"214",desc:"COBB SALAD",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"216",desc:"CAPRESE BOWL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"217",desc:"CROISSANT PRESUNTO CRU E QUEIJO BRIE",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"218",desc:"CROISSANT SALMAO E CREAM CHEESE",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"219",desc:"BLT SANDWICH",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"220",desc:"CALI CLUB SANDWICH",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"221",desc:"AVOCADO TOAST OVO CAIPIRA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"222",desc:"BRIE E PARMA BRIOCHE",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"223",desc:"CROQUE MONSIEUR",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"224",desc:"CROQUE MADAME",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"226",desc:"FRENCH TOAST CLASSICA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"227",desc:"FRENCH TOAST FRUTAS VERMELHAS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"228",desc:"SMORES JAR",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"231",desc:"RED VELVET MILKSHAKE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"232",desc:"COOKIES AND CREAM MILKSHAKE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"238",desc:"GUACAMOLE AND CHIPS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"239",desc:"CEVICHE SALMAO E ATUM",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"241",desc:"TOSTADAS CAMARAO E AVOCADO",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"242",desc:"TARTAR ATUM MACA VERDE JALAPENO MEL LARANJEIRA",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"243",desc:"CARPACCIO PEIXE BRANCO VINAGRETE MANGA VERDE PIMENTA ROSA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"244",desc:"QUEIJO BRIE EMPANADO",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"245",desc:"CROQUETAS PERNIL DEFUMADO",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"246",desc:"CRAB CAKE",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"247",desc:"MINI QUESADILLAS QUEIJO E COGUMELOS",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"248",desc:"BRUSCHETTA CAPRESE PESTO E PARMA CROCANTE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"249",desc:"FRITTO MISTO DO MAR",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"251",desc:"PULLED PORK SANDWICH COLESLAW BARBECUE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"252",desc:"FISH TACOS CALI STYLE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"253",desc:"ROBAL0 GRELHADO PURE ABACAXI PIMENTA ROSA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"254",desc:"SALMAO GLACEADO",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"255",desc:"POLVO GRELHADO PURE BATATA DOCE ROXA MANTEIGA PAPRICA",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"256",desc:"CAMAROES NA BRASA GLACE ABACAXI MEL CHIPOTLE",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"257",desc:"CAMARAO NO ABACAXI COM BACON",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"258",desc:"ROBALO MOLHO COCO CURRY RISOTO PERA GORGONZOLA",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"259",desc:"FILE MIGNON DEMI GLACE BALSAMICO",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"260",desc:"TEXAS BBQ RIBS GOIABADA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"261",desc:"MIGNON CALI SURF N TURF",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"262",desc:"FRANGO CAJUN ABACAXI GRELHADO ARROZ COCO",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"263",desc:"FRALDINHA COM VINAGRETE DE MANGA",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"264",desc:"DENVER STEAK MOLHO DEMI-GLACE CAFE CROSTA PANKO ERVAS",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"265",desc:"PRIME RIB MAUI COAST ABACAXI BOURBON",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"266",desc:"MAC AND CHEESE TRUFADO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"267",desc:"LASANHA BERINJELA GRELHADA BRIE PESTO RUCULA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"268",desc:"TOMAHAWK FOLHA DE OURO GNOCCHI MANDIOQUINHA",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"269",desc:"GNOCCHI MANDIOQUINHA QUEIJO A LA GRATAN",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"270",desc:"CHURROS MILHO CREME LIMAO PIMENTA ROSA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"271",desc:"FUDGE CHOCOLATE BELGA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"272",desc:"SORBET FRUTAS VERMELHAS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"274",desc:"ICE CREAM SANDWICH",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"275",desc:"ESPRESSO CLASSICO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"276",desc:"ESPRESSO DUPLO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"278",desc:"CAFE PINGADO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"279",desc:"CAFE COM LEITE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"280",desc:"CAPPUCCINO ITALIANO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"281",desc:"CAPPUCCINO CLASSICO BRASILEIRO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"282",desc:"CAPPUCCINO DOCE DE LEITE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"287",desc:"MATCHA LATTE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"288",desc:"SUCO DE LARANJA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"289",desc:"SUCO DE ABACAXI COM HORTELA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"290",desc:"SUCO DE MARACUJA NATURAL",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"291",desc:"SUCO DE LIMAO [LIMONADA DA CASA]",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"292",desc:"SUCO VERDE FUNCIONAL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"293",desc:"BEET LEMONADE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"294",desc:"SUNRISE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"295",desc:"ISLAND COOLER",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"296",desc:"SUCO DE MANGA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"311",desc:"MATCHA LEMONADE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"312",desc:"TOMMY-S MARGARITA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"313",desc:"WHISKEY SOUR",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"314",desc:"QUEENS PARK SUIZZLE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"315",desc:"NEGRONI BEACH",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"316",desc:"MANHATTAN CLASSIC",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"319",desc:"COSMOPOLITAN",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"320",desc:"DAIQUIRI TROPICAL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"321",desc:"TEQUILA SUNRISE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"322",desc:"MOSCOW MULE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"323",desc:"OLD FASHIONED",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"325",desc:"APEROL SPRITZ",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"327",desc:"SANTA MONICA BREEZE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"329",desc:"COCONUT BOULEVARDIER",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"330",desc:"CALI PASSION",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"331",desc:"SAL DO ORIENTE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"335",desc:"CITRUS SPARKLER",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"337",desc:"SMOKED PINEAPPLE OLD FASHIONED",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"338",desc:"DIVA DRINK",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"339",desc:"VIRGIN MOJITO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"340",desc:"PINK LEMONADE HOUSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"341",desc:"TROPICAL DETOX",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"342",desc:"COCONUT COOLER [SOFT]",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"343",desc:"SUNSET SPRITZ",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"344",desc:"SODA ITALIANA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"345",desc:"CHOPP HEINEKEN",unit:"UN",cat:"CERVEJAS E CHOPPS"},
+  {cod:"346",desc:"CHOPP IPA",unit:"UN",cat:"CERVEJAS E CHOPPS"},
+  {cod:"347",desc:"ESPRESSO MARTINE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"348",desc:"PENICILLIN",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"349",desc:"OCEAN SIDE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"350",desc:"CALI MARTINI",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"351",desc:"SUNLIGHT BAY",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"352",desc:"HONEY MOON",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"353",desc:"PISCO SOUR",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"354",desc:"CAIPIRINHA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"355",desc:"CAIPIROSKA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"356",desc:"CHILCANO DE PISCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"357",desc:"PISCO PUNCH",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"358",desc:"BLUE MOON",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"359",desc:"ABSOLUT DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"360",desc:"ABSOLUT VANILA DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"361",desc:"ABSOLUT VANILA GARRAFA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"362",desc:"GREY GOOSE DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"363",desc:"RAKU DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"364",desc:"CIROC DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"365",desc:"TANQUERAY DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"366",desc:"BEEFEATER DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"367",desc:"BOMBAY DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"368",desc:"ROKU DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"369",desc:"HENDRICKS DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"370",desc:"GORDONS DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"371",desc:"BACARDI CARTA BRANCA DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"372",desc:"HAVANA CLUB 7 ANOS DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"373",desc:"HAVANA CLUB 3 ANOS DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"374",desc:"MALIBU DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"375",desc:"ZACAPA DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"376",desc:"JOSE CUERVO SILVER",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"377",desc:"JOSE CUERVO GOLD",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"378",desc:"DON JULIO ANEJO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"379",desc:"DON JULIO BLANCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"380",desc:"JACK DANIELS DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"381",desc:"JACK DANIELS SINGLE DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"382",desc:"JIM BEAM DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"383",desc:"RED LABEL DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"384",desc:"BLACK LABEL DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"385",desc:"BLUE LABEL DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"386",desc:"GREEN LABEL DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"387",desc:"CHIVAS DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"388",desc:"MACALLAN DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"389",desc:"GLEMORANGIE DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"390",desc:"HIBIKI JAPONES DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"391",desc:"FIRE BALL DOSE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"392",desc:"JACK DANIELS SINGLE GARRAFA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"393",desc:"GREEN LABEL GARRAFA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"394",desc:"BLUE LABEL GARRAFA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"395",desc:"WEBER HAUS DOSE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"396",desc:"SALINAS DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"397",desc:"SAGATIBA DOSE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"398",desc:"CARPANO CLASSICO DOSE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"399",desc:"JAGUERMEISTER DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"400",desc:"JAGUERMEISTER GARRAFA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"401",desc:"DI TORINO DOSE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"402",desc:"AMARETTO DOSE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"403",desc:"BAILEYS DOSE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"404",desc:"LICOR 43 DOSE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"405",desc:"LICOR 43 BRULEE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"406",desc:"LICOR 43 BRULLE GARRAFA",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"407",desc:"SAQUE AZUMA KIRIN DOSE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"408",desc:"CAMPARI DOSE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"409",desc:"HENNESSY DOSE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"410",desc:"REMY MARTIN DOSE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"411",desc:"CAMPARI GARRAFA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"413",desc:"BOSSA MOSCATEL - HERMANN",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"414",desc:"LA LINDA EXTRA BRUT - LUIGI BOSCA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"415",desc:"CAVE GEISSE NATURE - CAVE GEISSE",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"419",desc:"PINOT GRIGIO - ALBINO ARMANI",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"420",desc:"CYPRESS CHARDONNAY - J. LOHR",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"421",desc:"CHABLIS LER CRU BEAUROY - ALAIN GEOFFROY",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"423",desc:"CLAUDE VAL BLANC",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"424",desc:"SAURUS PINOT NOIR ROSE - SCHROEDER",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"425",desc:"PHEBUS ESTATE MALBEC - BODEGAS FABRE",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"426",desc:"CABERNET SAUVIGNON CIVIS - TERRANOBLE",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"427",desc:"PRIMITIVA HYRIA - PIETRAPURA",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"428",desc:"CYPRESS MERLOT - J. LOHR",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"429",desc:"QUINTA DA GAIVOSA",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"430",desc:"RED BULL",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"431",desc:"TONICA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"432",desc:"TONICA ZERO",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"434",desc:"GUACAMOLE AND CHIPS ALMOCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"435",desc:"CEVICHE SALMAO E ATUM ALMOCO",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"436",desc:"QUEIJO BRIE EMPANADO ALMOCO",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"437",desc:"CROQUETAS PERNIL DEFUMADO ALMOCO",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"438",desc:"CRAB CAKE ALMOCO",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"439",desc:"FRITTO MISTO DO MAR ALMOCO",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"441",desc:"GREEK SALAD ALMOCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"442",desc:"BRISKET COM POLENTA CREMOSA E DEMIGLACE",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"443",desc:"TILAPIA GRELHADA AO MOLHO DE LIMAO",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"444",desc:"FRANGO CAJUN COM MOLHO DE LARANJA",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"445",desc:"NHOQUE DE MANDIOQUINHA AO POMODORO BASILICO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"446",desc:"PICANHA CALI STYLE",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"447",desc:"MEDALHAO DE MIGNON AO POIVRE",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"448",desc:"XIXO DE MIGNON",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"449",desc:"LOMO SALTADO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"450",desc:"DENVER STEAK COM PURE DE BATATA DOCE ROXA",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"451",desc:"SALMAO GRELHADO ALMOCO",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"452",desc:"CAMAROES THAI AO LEITE DE COCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"454",desc:"CHURROS MILHO CREME LIMAO PIMENTA ROSA ALMOCO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"456",desc:"SMORES JAR ALMOCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"457",desc:"HEINEKEN LONG NECK ZERO",unit:"UN",cat:"CERVEJAS E CHOPPS"},
+  {cod:"459",desc:"FAUSTO CARBENET SAUVIGNON",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"460",desc:"FAUSTO CHARDONNAY",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"461",desc:"FAUSTO MERLOT ROSE",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"463",desc:"GUARANA ZERO",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"464",desc:"LEVAR CHOPP HEINEKEN 500ML",unit:"UN",cat:"CERVEJAS E CHOPPS"},
+  {cod:"465",desc:"ADICIONAL DE OVO POCHE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"466",desc:"ADICIONAL DE BACON FATIADO",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"467",desc:"ADICIONAL DE AVOCADO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"469",desc:"ADICIONAL DE BOLA DE SORVETE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"470",desc:"SUCO DE FRUTAS VERMELHAS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"471",desc:"CRAB CAKE ANO NOVO",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"472",desc:"ANO NOVO SEQUENCIA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"473",desc:"KALE CALI SALAD",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"474",desc:"CONFIT DE BACALHAU",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"475",desc:"RAVIOLI DE MAÇA COM NOZES",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"476",desc:"MASHED POTATOES COM PARMA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"477",desc:"RABANADA ARTESANAL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"480",desc:"ADICIONAL DE MIGNON TORNEDOR",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"481",desc:"PRATO KIDS MAC N CHEESE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"482",desc:"PRATO KIDS ISCA DE CARNE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"483",desc:"ADICIONAL DE FRANGO EM ISCA",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"484",desc:"ADICIONAL ISCA DE MIGNON KIDS",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"486",desc:"ADICIONAL DE ARROZ",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"487",desc:"CROQUETAS DE PERNIL HAPPY HOUR",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"488",desc:"CROQUETAS DE COSTELA HAPPY HOUR",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"489",desc:"GUACAMOLE E CHIPS HAPPY",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"490",desc:"CAMAROES FRITOS HAPPY HOUR",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"491",desc:"BATATA FRITA HAPPY HOUR",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"493",desc:"ISCA DE ALCATRA ACEBOLADA HAPPY",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"494",desc:"ISCA DE FRANGO A MILANESA HAPPY",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"495",desc:"ISCA DE TILAPIA A MILANESA",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"496",desc:"QUESADILHA DE CARNE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"497",desc:"CEVICHE DE SALMAO E ATUM HAPPY",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"498",desc:"TARTAR DE ATUM HAPPY",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"499",desc:"CRAB CAKE HAPPY",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"500",desc:"ADICIONAL BATATA KIDS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"501",desc:"GIN TONICA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"502",desc:"GIN TROPICAL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"503",desc:"MOJITO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"504",desc:"FITZGERALD",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"505",desc:"SEX ON THE BEACH",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"506",desc:"FERNET COCA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"507",desc:"PHEBUS ESTATE TORRONTES - BODEGAS FABRE",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"511",desc:"CREME DE AVELA NUTELLA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"514",desc:"ARROZ BRANCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"515",desc:"PANO MULT AZUL PERFEX",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"516",desc:"ACUCAR REFINADO",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"517",desc:"PRIME RIB",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"518",desc:"TOMAHAWK",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"519",desc:"FRALDINHA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"520",desc:"ADICIONAL DE VINAGRETE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"521",desc:"AZEITONA VERDE S/CAROÇO",unit:"BD",cat:"SECOS E MERCEARIA"},
+  {cod:"526",desc:"SUCO DE MORANGO NATURAL",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"528",desc:"ADICIONAL COZUMEL - SAL, GELO E LIMÃO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"606",desc:"FLOR DE SAL",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"607",desc:"SALSA TARTUFATA NEGRA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"608",desc:"OVAS DE CAPELIM",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"609",desc:"ATUM LOMBO FRESCO",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"610",desc:"MARISCO MEIA CASCA",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"611",desc:"SIRI CARNE",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"612",desc:"SALMAO",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"613",desc:"PESCADA AMARELA",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"614",desc:"CAMARAO ROSA",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"615",desc:"CAMARAO VANNAMEI",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"616",desc:"OSTRA",unit:"DZ",cat:"FRUTOS DO MAR"},
+  {cod:"617",desc:"OVAS PRETAS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"618",desc:"PASTA DE AMENDOIM",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"619",desc:"SEMENTE DE CHIA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"620",desc:"CRANBERRY DESIDRATADO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"621",desc:"AVEIA FLOCOS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"623",desc:"ALHO EM PO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"624",desc:"CEBOLA EM PO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"625",desc:"COMINHO MOIDO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"626",desc:"MATCHA EM PO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"627",desc:"GUARDANAPO FOLHA DUPLA",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"628",desc:"BACON MANTA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"629",desc:"PROVOLONE",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"630",desc:"CREAM CHEESE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"631",desc:"TILAPIA",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"632",desc:"MUSSARELA",unit:"KG",cat:"SECOS E MERCEARIA"},
+  {cod:"633",desc:"GOUDA",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"634",desc:"CORACAO DE GALINHA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"636",desc:"FILE COXA/SOB",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"637",desc:"PARMESAO",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"638",desc:"MARGARINA S/SAL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"639",desc:"PERNIL",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"640",desc:"GORGONZOLA",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"641",desc:"BOV CARNE MOIDA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"642",desc:"SUI COSTELA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"643",desc:"BOV COSTELA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"644",desc:"MASSA FOLHADA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"645",desc:"BOV CUPIM",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"646",desc:"ACUCAR CONFEITEIRO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"647",desc:"ACUCAR GELADO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"648",desc:"CHOCOLATE EM PO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"649",desc:"BOV COSTELA RIPA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"650",desc:"CALABRESA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"651",desc:"QUEIJO COALHO",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"652",desc:"REQUEIJAO CREM CHEDDAR",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"653",desc:"REQUEIJAO",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"654",desc:"QUEIJO RICOTA",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"655",desc:"ACAI",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"656",desc:"BACON CUBOS",unit:"PT",cat:"CARNES E AVES"},
+  {cod:"657",desc:"CARNE DESFIADA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"658",desc:"LINGUICA TOSCANA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"659",desc:"AIPIM NOISETTE",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"660",desc:"MASSA CARACOL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"661",desc:"MILHO VERDE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"662",desc:"CANUDO MEXEDOR DRINK PRETO",unit:"CX",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"664",desc:"CANUDO MILKSHAKE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"665",desc:"FORMA DE SILICONE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"666",desc:"CANUDO SUCO DRINK",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"667",desc:"CAFE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"669",desc:"POLVO KG",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"670",desc:"LULA EM ANEL",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"671",desc:"ROBALO FILE",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"672",desc:"TACA NEVADA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"673",desc:"CALDERETA CHOPP BRAHMA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"674",desc:"BALDE PLASTICO SPATEN",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"675",desc:"CANECA DE VIDRO SPATEN",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"676",desc:"ABOBORA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"677",desc:"ABOBRINHA VERDE",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"678",desc:"ALHO",unit:"KG",cat:"SECOS E MERCEARIA"},
+  {cod:"679",desc:"CENOURA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"680",desc:"BANANA CATURRA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"681",desc:"BATATA LAVADA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"682",desc:"BATATA ROSA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"683",desc:"BATATA SALSA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"684",desc:"CEBOLA BRANCA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"685",desc:"CEBOLA ROXA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"686",desc:"GENGIBRE",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"687",desc:"LARANJA PERA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"688",desc:"LIMAO TAITI",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"689",desc:"LIMAO SICILIANO",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"690",desc:"MACA FUJI",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"691",desc:"MACA VERDE",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"692",desc:"MANGA TOMY",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"693",desc:"MARACUJA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"694",desc:"PEPINO JAPONES",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"695",desc:"PERA ARGENTINA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"696",desc:"PIMENTA DEDO MOCA BDJ",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"697",desc:"ABACAXI PEROLA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"698",desc:"ALECRIM",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"699",desc:"TOMILHO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"700",desc:"HORTELA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"701",desc:"MANJERICAO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"702",desc:"SALSINHA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"703",desc:"RUCULA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"704",desc:"BROCOLIS CHINES",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"705",desc:"COUVE FLOR",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"706",desc:"ALFACE CRESPA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"707",desc:"ALFACE AMERICANA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"708",desc:"ALFACE ROXA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"709",desc:"MORANGO BDJ",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"710",desc:"COUVE MINEIRA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"711",desc:"SALSAO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"712",desc:"CEBOLETE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"713",desc:"FIGO ROXO BDJ",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"714",desc:"COGUMELO PARIS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"715",desc:"COGUMELO SHITAKE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"716",desc:"COGUMELO SHIMEJI",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"717",desc:"BATATA DOCE ROXA",unit:"KG",cat:"SECOS E MERCEARIA"},
+  {cod:"718",desc:"PIMENTA CAMBUCI BDJ",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"719",desc:"TOMATE ITALIANO MOLHO",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"720",desc:"MIRTILO BDJ",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"722",desc:"PHYSALIS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"723",desc:"AMORA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"724",desc:"MILHO BANDEJA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"725",desc:"UVA THOMPSON VERDE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"726",desc:"OVO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"727",desc:"ALHO DESCASCADO PCT",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"728",desc:"ALFACE FRISEE",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"729",desc:"TOMATE CEREJA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"730",desc:"BATATA DOCE",unit:"KG",cat:"SECOS E MERCEARIA"},
+  {cod:"731",desc:"UVA VITORIA ROXA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"732",desc:"LARANJA BAHIA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"733",desc:"ASPARGOS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"734",desc:"LICHIA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"735",desc:"ROSAS RAMALHETE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"736",desc:"CENOURA BABY",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"738",desc:"FLOR COMESTIVEL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"740",desc:"REPOLHO VERDE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"741",desc:"REPOLHO ROXO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"742",desc:"BATATA SOUTE",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"743",desc:"BANANA DA TERRA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"744",desc:"COOKIE RECHEADO COM NUTELLA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"745",desc:"ABACATE AVOCADO",unit:"BDJ",cat:"HORTIFRUTI"},
+  {cod:"746",desc:"COENTRO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"747",desc:"SALSA CRESPA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"749",desc:"ALHO PORO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"750",desc:"CAPPUCCINO",unit:"KG",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"751",desc:"CAFE GARIBALDI",unit:"KG",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"752",desc:"CHOCOLATE SUISSE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"753",desc:"CREME DE LEITE NATA",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"754",desc:"COXINHA DA ASA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"755",desc:"PRESUNTO PARMA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"756",desc:"FRUTA AMORA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"757",desc:"FRUTA MIRTILO",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"758",desc:"FRUTA MORANGO",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"759",desc:"BV MIOLO ALCATRA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"760",desc:"BV FILE COSTELA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"761",desc:"SUINO BISTECA",unit:"KG",cat:"SECOS E MERCEARIA"},
+  {cod:"762",desc:"FILE PEITO",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"763",desc:"MANTEIGA S/SAL",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"764",desc:"GUARDANAPO",unit:"CX",cat:"LIMPEZA E HIGIENE"},
+  {cod:"765",desc:"AGUA SANITARIA 5L PETIT",unit:"GL",cat:"LIMPEZA E HIGIENE"},
+  {cod:"766",desc:"AGUA SANITARIA",unit:"CX",cat:"LIMPEZA E HIGIENE"},
+  {cod:"767",desc:"FIBRA LIMPEZA FIBRACO C/10 BETTANIN REF:9500",unit:"PC",cat:"LIMPEZA E HIGIENE"},
+  {cod:"768",desc:"PANELA ELECTRICA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"769",desc:"CHOCOLATE GOTAS SICAO",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"770",desc:"CHOCOLATE GOTAS AO LEITE SICAO",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"771",desc:"CHOCOLATE GOTAS BRANCO SICAO",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"772",desc:"OVO GEMA PASTEURIZADA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"773",desc:"CEREJA EM CALDA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"774",desc:"NOZES MARIPOSA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"775",desc:"NOZES MARIPOSA QUARTZ",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"776",desc:"CREME DE LEITE",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"777",desc:"FILE MEIO PEITO",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"778",desc:"QUEIJO TIPO BRIE",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"779",desc:"CEREJA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"780",desc:"MICRO VERDES",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"784",desc:"LICOR COINTREAU DOSE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"785",desc:"ARROZ PARB URBANO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"787",desc:"BATATA CG 7MM",unit:"KG",cat:"SECOS E MERCEARIA"},
+  {cod:"788",desc:"FEIJAO CARIOCA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"789",desc:"AMIDO DE MILHO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"790",desc:"MEIO ASA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"791",desc:"SOBREPALETA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"792",desc:"C BV MUSCULO",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"793",desc:"BV MOIDA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"794",desc:"AV PEITO",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"795",desc:"COXA C/SB",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"796",desc:"LEITE INTEGRAL",unit:"CX",cat:"LATICÍNIOS E OVOS"},
+  {cod:"797",desc:"DOCE LEITE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"798",desc:"TOSCANA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"799",desc:"TRIGO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"800",desc:"FAR PANKO TOSCANA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"801",desc:"OLEO MISTO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"802",desc:"AMORA SACO",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"803",desc:"AMORA CONG",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"804",desc:"MORANGO CONG",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"805",desc:"FRAMBOESA CONG",unit:"GR",cat:"HORTIFRUTI"},
+  {cod:"806",desc:"MANDIOCA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"807",desc:"FILE MIGNON",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"808",desc:"PICANHA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"809",desc:"MOLHO SHOYU",unit:"GL",cat:"SECOS E MERCEARIA"},
+  {cod:"810",desc:"SUAN [ESPINHACO]",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"811",desc:"TOMATE PELADO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"813",desc:"OLEO ALGODAO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"814",desc:"SAL GROSSO",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"815",desc:"FUNGHI SECO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"816",desc:"FAR PANKO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"818",desc:"VINHO VAILATTI BRANCO SECO",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"819",desc:"VINHO VAILATTI TINTO SECO",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"820",desc:"CASTANHA CAJU",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"821",desc:"AMENDOA LAMINADA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"822",desc:"LOMBO DEF FAT",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"823",desc:"PEITO PERU",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"824",desc:"SALAME ITALIANO",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"825",desc:"MOSTARDA AMARELA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"826",desc:"LEITE COCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"827",desc:"TOMATE SECO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"828",desc:"AZEITE OLV",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"829",desc:"QUEIJO BRIE",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"830",desc:"PEPINO MIUDO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"831",desc:"AZEITONA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"832",desc:"QUEIJO MUSS BUFALA",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"833",desc:"COCO RAL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"834",desc:"NOZES QUARTILHO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"835",desc:"PALMITO INT",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"836",desc:"MOSTARDA MAILLE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"837",desc:"MAS PASTEL/LASANHA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"838",desc:"FIGO VERDE CALDA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"839",desc:"CONF BRANCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"840",desc:"COB GOTA BRANCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"841",desc:"FILE SAITHE",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"843",desc:"MIRTILO [BLUBERRY] CONG",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"844",desc:"OLEO SOJA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"845",desc:"GEL 1P 420L",unit:"PEC",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"846",desc:"PASTA PARA RECHEIO MORANGO",unit:"PT",cat:"CONFEITARIA"},
+  {cod:"847",desc:"PASTA PARA RECHEIO MIRTILO",unit:"PT",cat:"CONFEITARIA"},
+  {cod:"848",desc:"PASTA PARA RECHEIO MARACUJA",unit:"PT",cat:"CONFEITARIA"},
+  {cod:"849",desc:"ACUCAR MASCAVO",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"850",desc:"CHOCOLATE GOTAS MEIO AMARGO",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"851",desc:"FERMENTO QUIMICO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"852",desc:"FUBA MIMOSO",unit:"FD",cat:"PADARIA E MASSAS"},
+  {cod:"853",desc:"PAPEL TOALHA",unit:"FD",cat:"LIMPEZA E HIGIENE"},
+  {cod:"854",desc:"LUVA NITRILICA SEM PO PRETA",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"855",desc:"NOZES PECAN",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"857",desc:"CORANTE AMARELO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"858",desc:"CORANTE VERMELHO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"859",desc:"BARRIL 30L",unit:"UN",cat:"CERVEJAS E CHOPPS"},
+  {cod:"860",desc:"CILINDRO 9KG",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"861",desc:"CHOPP HEINEKEN BARRIL",unit:"LT",cat:"CERVEJAS E CHOPPS"},
+  {cod:"862",desc:"APERITIVO APEROL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"863",desc:"TEQUILA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"864",desc:"CACHACA SAGATIBA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"865",desc:"WHISKY BLACK LABEL",unit:"UN",cat:"DESTILADOS"},
+  {cod:"866",desc:"VODKA GREY GOOSE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"867",desc:"ABACATE",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"868",desc:"PIMENTAO VERMELHO",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"869",desc:"PIMENTAO AMARELO",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"870",desc:"CEBOLINHA VERDE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"872",desc:"MELANCIA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"873",desc:"TORANJA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"874",desc:"KIWI",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"875",desc:"PIMENTAO VERDE",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"876",desc:"TOMATE SALADA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"877",desc:"BETERRABA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"878",desc:"RADITE ROXO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"879",desc:"COGUMELO PORTO BELO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"880",desc:"ERVILHA TORTA BDJ",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"881",desc:"MEL SILVESTRE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"882",desc:"MARACUJA CONG",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"883",desc:"BERINJELA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"884",desc:"TOMATE ITALIANO",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"885",desc:"CAMBUCI",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"886",desc:"PIMENTA DEDO MOCA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"887",desc:"CHOPP HEINEKEN PILSEN",unit:"UN",cat:"CERVEJAS E CHOPPS"},
+  {cod:"888",desc:"DIOXIDO DE CARBONO",unit:"UN",cat:"CERVEJAS E CHOPPS"},
+  {cod:"889",desc:"WHISKY JIM BEAM [WHITE]",unit:"UN",cat:"DESTILADOS"},
+  {cod:"890",desc:"XAROPE CRANBERRY",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"891",desc:"XAROPE MONIN COCONUT",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"892",desc:"VERMOUTH CARPANO CLASSICO ROSSO",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"893",desc:"ESPUMANTE CINZANO TO SPRITZ DRY",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"894",desc:"VODKA SKYY",unit:"UN",cat:"DESTILADOS"},
+  {cod:"895",desc:"XAROPE GENGIBRE",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"896",desc:"BITTER CAMPARI",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"897",desc:"XAROPE ABACAXI",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"898",desc:"XAROPE MELANCIA",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"899",desc:"XAROPE ROMA",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"900",desc:"XAROPE FRAMBOESA",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"901",desc:"RUM SPICED SAN BASILE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"902",desc:"RUM BRANCO SAN BASILE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"903",desc:"LICOR AMARETTO DELL ORSO",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"904",desc:"NIB BITTER",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"905",desc:"VINAGRE ALCOOL",unit:"GL",cat:"SECOS E MERCEARIA"},
+  {cod:"906",desc:"PIMENTA RED TABASCO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"907",desc:"GRANOLA S/ACUCAR",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"908",desc:"LEITE COND",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"909",desc:"FUBA FINO",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"910",desc:"CATCHUP",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"911",desc:"BANANA BRANCA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"912",desc:"MACA GALA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"913",desc:"MANGA PALMER",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"914",desc:"PASTA PARA RECHEIO FRUTAS AMARELAS",unit:"PT",cat:"CONFEITARIA"},
+  {cod:"915",desc:"PASTA PARA RECHEIO AMORA",unit:"PT",cat:"CONFEITARIA"},
+  {cod:"916",desc:"COCO FLOCADO QUEIMADO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"917",desc:"FARINHA DE AMENDOAS",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"918",desc:"CREME TIPO CHANTILLY",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"919",desc:"AVELA SEM CASCA",unit:"PO",cat:"CONFEITARIA"},
+  {cod:"920",desc:"COCO EM FLOCOS",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"921",desc:"AMENDOA SEM PELE FATIADA",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"922",desc:"AMENDOA INTEIRA",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"923",desc:"CHOCOLATE GRANULE AO LEITE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"924",desc:"CHOCOLATE GRANULE BRANCO",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"925",desc:"CHOCOLATE GRANULE AMARGO 70%",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"926",desc:"CONFEITE PISTACHE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"927",desc:"POTE REDONDO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"928",desc:"COCO MEDIO",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"929",desc:"ALFACE LISA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"930",desc:"SALVIA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"931",desc:"MILHO ESPIGA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"932",desc:"OPCIONAL DE VODKA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"933",desc:"OPCIONAL DE TEQUILA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"934",desc:"ADICIONAL DE PÃO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"936",desc:"PERU TEMP",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"938",desc:"POTE PAPEL BRANCO",unit:"CX",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"939",desc:"TELA DE IMPRESSAO",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"940",desc:"DISPENSER SABONETEIRA BRANCA",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"941",desc:"DISPENSER PAPEL HIG.ROLAO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"942",desc:"DISPENSER PAPEL TOALHA",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"943",desc:"BATATA PALHA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"944",desc:"BISCOITO TRITURADO SABOR CHOCOLATE",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"945",desc:"FARINHA TRIGO",unit:"FD",cat:"PADARIA E MASSAS"},
+  {cod:"946",desc:"GOIABADA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"948",desc:"SAL REFINADO",unit:"FD",cat:"SECOS E MERCEARIA"},
+  {cod:"949",desc:"ALCOOL 70",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"950",desc:"EXTRATO TOMATE",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"952",desc:"POLENTINA",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"953",desc:"POTE 1LT TRANSP REDONDO COM TAMPA",unit:"PCT",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"954",desc:"POTE 500ML TRANSP REDONDO COM TAMPA",unit:"PCT",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"955",desc:"MACARRAO GRANO DURO ESPAGUETE",unit:"FD",cat:"PADARIA E MASSAS"},
+  {cod:"956",desc:"VASSOURA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"957",desc:"RODO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"958",desc:"BOMBA DE AGUA PARA GALAO",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"959",desc:"TOUCA TNT BRANCA",unit:"PC",cat:"LIMPEZA E HIGIENE"},
+  {cod:"960",desc:"PRANCHETA A4 MADEIRA",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"961",desc:"TORRE CHOPP CROMADA 3 SAIDAS",unit:"PC",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"962",desc:"VODKA CIROC",unit:"UN",cat:"DESTILADOS"},
+  {cod:"963",desc:"WHISKY JOHNNIE WALKER GREEN LABEL",unit:"UN",cat:"DESTILADOS"},
+  {cod:"964",desc:"XAROPE MANGA",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"965",desc:"XAROPE GRENADINE",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"966",desc:"XAROPE MACA VERDE",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"967",desc:"XAROPE CHA PRETO COM LIMAO",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"968",desc:"XAROPE TANGERINA",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"969",desc:"WHISKY RED LABEL",unit:"UN",cat:"DESTILADOS"},
+  {cod:"970",desc:"WHISKY BLUE LABEL",unit:"UN",cat:"DESTILADOS"},
+  {cod:"971",desc:"WHISKY JAPONES HIBIKI",unit:"UN",cat:"DESTILADOS"},
+  {cod:"972",desc:"GIN ROKU",unit:"UN",cat:"DESTILADOS"},
+  {cod:"973",desc:"GIN TANQUERAY",unit:"UN",cat:"DESTILADOS"},
+  {cod:"974",desc:"GIN BEEFEATER",unit:"UN",cat:"DESTILADOS"},
+  {cod:"975",desc:"VODKA ABSOLUT VANILIA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"976",desc:"WHISKY BULLEIT",unit:"UN",cat:"DESTILADOS"},
+  {cod:"977",desc:"TEQUILA JOSE CUERVO SILVER",unit:"UN",cat:"DESTILADOS"},
+  {cod:"978",desc:"LICOR COINTREAU FRANCES",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"979",desc:"VERMOUTH ROSSO SAN BASILE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"980",desc:"VERMOUTH EXTRA DRY",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"981",desc:"RUM MALIBU",unit:"UN",cat:"DESTILADOS"},
+  {cod:"982",desc:"GIN HENDRICKS",unit:"UN",cat:"DESTILADOS"},
+  {cod:"983",desc:"WHISKY GLENMORANGIE 10 ANOS",unit:"UN",cat:"DESTILADOS"},
+  {cod:"984",desc:"WHISKY MACALLAN 12 ANOS",unit:"UN",cat:"DESTILADOS"},
+  {cod:"985",desc:"WHISKY JACK DANIELS OLD N7",unit:"UN",cat:"DESTILADOS"},
+  {cod:"986",desc:"WHISKY JACK DANIELS [SINGLE BARREL]",unit:"UN",cat:"DESTILADOS"},
+  {cod:"987",desc:"WHISKY CHIVAS REGAL 12 ANOS",unit:"UN",cat:"DESTILADOS"},
+  {cod:"988",desc:"VODKA ABSOLUT",unit:"UN",cat:"DESTILADOS"},
+  {cod:"989",desc:"VODKA HAKU JAPONESA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"990",desc:"BITTER AROMATICO ORANGE",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"991",desc:"XAROPE [PURE LE FRUIT]",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"992",desc:"WHISKY FIREBALL CINNAMON [CANELA]",unit:"UN",cat:"DESTILADOS"},
+  {cod:"993",desc:"JAGERMEISTER",unit:"UN",cat:"DESTILADOS"},
+  {cod:"994",desc:"JAGERMEISTER [COLD BREW]",unit:"UN",cat:"DESTILADOS"},
+  {cod:"995",desc:"LICOR BAILEYS",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"996",desc:"CACHACA SALINAS [CRISTALINA]",unit:"UN",cat:"DESTILADOS"},
+  {cod:"997",desc:"RUM BACARDI CARTA BRANCA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"998",desc:"TEQUILA DON JULIO ANEJO",unit:"UN",cat:"DESTILADOS"},
+  {cod:"999",desc:"TEQUILA DON JULIO BLANCO",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1000",desc:"LICOR SAN BASILE [CAFE]",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1001",desc:"LICOR SAN BASILE [FERNET ANDINO]",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1002",desc:"GIN GORDONS LONDON DRY",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1003",desc:"LICOR SAN BASILE [AMARETTO DA LEONE]",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1004",desc:"COGNAC REMY MARTIN V.S.O.P",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1005",desc:"COGNAC HENNESSY V.S.",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1006",desc:"CACHACA WEBER HAUS 7 MADEIRAS PREMIUM",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1007",desc:"VERMOUTH 1757 DI TORINO ROSSO",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1008",desc:"RUM HAVANA CLUB 7 YEARS OLD",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1009",desc:"RUM HAVANA CLUB 3 YEARS OLD",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1010",desc:"TEQUILA JOSE CUERVO REPOSADO",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1011",desc:"RUM ZACAPA [23 SOLERA] CENTENARIO",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1012",desc:"SAKE AZUMA KIRIN SOFT",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1013",desc:"ACIDO CITRICO PURO - GRAU ALIMENTICIO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1014",desc:"RUM BACARDI CARTA OURO",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1015",desc:"LICOR STOCK CURACAU BLUE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1019",desc:"LICOR SCHLUCK [PESSEGO]",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1020",desc:"XAROPE MARACUJA",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"1021",desc:"GIN SAN BASILE [CLASSIC]",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1022",desc:"GIN BOMBAY SAPPHIRE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1023",desc:"CACHACA GIUSEPPE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1024",desc:"XAROPE AGAVE",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"1025",desc:"ACUCAR CRISTAL COLORIDO VERMELHO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1026",desc:"PISTACHE S/CASCA",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"1027",desc:"GLUCOSE DE MILHO",unit:"BD",cat:"CONFEITARIA"},
+  {cod:"1028",desc:"FILE DE SALMAO",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"1029",desc:"FILE DE TILAPIA",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"1030",desc:"OSTRA FRESCA COM SIF",unit:"DZ",cat:"FRUTOS DO MAR"},
+  {cod:"1031",desc:"FERMENTO BIOLOG SECO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1032",desc:"REC FORN PISTACHE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1033",desc:"CRAVO DA INDIA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1034",desc:"CANELA PO",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1035",desc:"REC FORN AVELA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1036",desc:"MARSHMALLOW CAMPING",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"1037",desc:"CONFETE MINI DISQUETI COLORIDO",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"1038",desc:"CORANTE HIDROSSOLUVEL EM PO VERMELHO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1039",desc:"COPO PET CRISTAL 550ML",unit:"CX",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1040",desc:"TAMPA PET BOLHA COM FURO COPOS 98MM",unit:"CX",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1041",desc:"COCO AUTENTICOCO PERSONALIZADOS",unit:"CX",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1042",desc:"CAIXA PROFISSIONAL C/ TAMPA PARA RESTAURANTE",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1043",desc:"PORTA PAPEL HIGIENICO PAREDE ROLAO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1044",desc:"PRE RESFRIADOR 2 SAIDAS GLICOL",unit:"PC",cat:"CERVEJAS E CHOPPS"},
+  {cod:"1045",desc:"TACA X 06 MARTINI",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1046",desc:"PISCO ACHOLADO BARSOL",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1047",desc:"BACON FAT",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"1048",desc:"QUEIJO MUSSARELA FAT",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1049",desc:"QUEIJO G.PADANO NERO",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1050",desc:"OLEO GERGELIM TORRADO",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1065",desc:"COPO SAFIRA 70 ML",unit:"PC",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1066",desc:"FAR MILHO MEDIA",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"1067",desc:"FAR ROSCA",unit:"KG",cat:"PADARIA E MASSAS"},
+  {cod:"1068",desc:"FEIJAO PRETO",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1069",desc:"GERGELIM PRETO TOSCANA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1070",desc:"LEMON PEPPER",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1071",desc:"LOURO EM FOLHAS",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1072",desc:"MOSTARDA SACHE",unit:"CX",cat:"SECOS E MERCEARIA"},
+  {cod:"1073",desc:"CATCHUP SACHE",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1074",desc:"MAIONESE SACHE",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1075",desc:"ACUCAR SACHE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1076",desc:"NOZ MOSCADA PO",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1077",desc:"OLEO GERGELIM",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1078",desc:"PIMENTA PRETA EM GRAO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1079",desc:"PAPRICA DOCE",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1080",desc:"PAPRICA DEFUMADA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1081",desc:"ACAFRAO DA TERRA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1082",desc:"ACUCAR DEMERARA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1083",desc:"LEITE PO INST",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1084",desc:"CURRY",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1085",desc:"PANO MULT AZUL VABENE",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1086",desc:"GOIABADA CASCAO",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1087",desc:"BOBINA PICOT 5KG",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1089",desc:"GRAPEFRUIT DESIDRATADA",unit:"PACOTE",cat:"HORTIFRUTI"},
+  {cod:"1090",desc:"ABACAXI SEM CASCA DESIDRATADO",unit:"PACOTE",cat:"HORTIFRUTI"},
+  {cod:"1091",desc:"MANGA DESIDRATADA",unit:"PACOTE",cat:"HORTIFRUTI"},
+  {cod:"1092",desc:"LIMAO TAHITI DESIDRATADO",unit:"PACOTE",cat:"HORTIFRUTI"},
+  {cod:"1093",desc:"SACO VACUO",unit:"MIL",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1094",desc:"MEXILHAO MEIA CONCHA",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"1095",desc:"LEITE CONDENSADO INTEGRAL",unit:"PC",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1096",desc:"GELATINA SEM SABOR",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"1097",desc:"COCO UMIDO ADOCADO MAIS COCO",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"1098",desc:"NEGRESCO TRITURADO",unit:"PC",cat:"PADARIA E MASSAS"},
+  {cod:"1099",desc:"CHOCOLATE COBERTURA CHIPS AO LEITE",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"1100",desc:"CHOCOLATE COBERTURA GOTAS MEIO AMARGO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1101",desc:"DOCE DE LEITE BALDE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1102",desc:"FERMENTO BIOLOGICO MASSA DOCE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1103",desc:"FLOCOS CROCANTES OVOMALTINE",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"1104",desc:"PLACAS DE WAFER",unit:"CX",cat:"PADARIA E MASSAS"},
+  {cod:"1105",desc:"PASTA SABORIZANTE PISTACHE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1106",desc:"PASTA SABORIZANTE AVELA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1107",desc:"GOIABADA BLOCO",unit:"CX",cat:"SECOS E MERCEARIA"},
+  {cod:"1108",desc:"DESMOLDANTE SPRAY",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1109",desc:"CHOCOLATE POWER BALL MICRO AO LEITE",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"1110",desc:"ACIDO CITRICO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1111",desc:"GOMA AGAR-AGAR",unit:"PT",cat:"CONFEITARIA"},
+  {cod:"1112",desc:"PASTA SABORIZANTE BAUNILHA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1113",desc:"CARLEX SPRAY",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1114",desc:"PACOCA ROLHA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1115",desc:"ADOCANTE SACHE",unit:"CX",cat:"SECOS E MERCEARIA"},
+  {cod:"1116",desc:"ESSENCIA DE BAUNILHA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1117",desc:"CAPSULAS DE GAS PARA CHANTILLY",unit:"CX",cat:"CONFEITARIA"},
+  {cod:"1118",desc:"CORN FLAKES NATURAL",unit:"PC",cat:"PADARIA E MASSAS"},
+  {cod:"1119",desc:"CORN FLAKES SUGAR",unit:"PC",cat:"PADARIA E MASSAS"},
+  {cod:"1120",desc:"SACO DE CONFEITAR DESCARTAVEL",unit:"PC",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1121",desc:"BICO DE CONFEITAR",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1122",desc:"SACO TRANSPARENTE INCOLOR",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1123",desc:"LOMBO DE ATUM RESFRIADO",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"1124",desc:"FILE DE ROBALO",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"1125",desc:"MAS SEMOLA PENNE",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"1126",desc:"MAS SEMOLA ESPAGUETE",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"1127",desc:"SACO LIXO",unit:"PT",cat:"SECOS E MERCEARIA"},
+  {cod:"1128",desc:"GELO ROCKS",unit:"PCT",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"1129",desc:"MASSAS ALIMENTICIAS TORTILLA TRIGO",unit:"CX",cat:"SECOS E MERCEARIA"},
+  {cod:"1130",desc:"MASSA ALIMENTICIAS DE MILHO AMARELO",unit:"CX",cat:"PADARIA E MASSAS"},
+  {cod:"1131",desc:"CANELA CASCA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1132",desc:"BOMBOM OURO BRANCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1133",desc:"ACUCAR CRISTAL",unit:"FD",cat:"CONFEITARIA"},
+  {cod:"1134",desc:"LACTA BOMBOM SONHO DE VALSA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1135",desc:"CAFE CABOCLO",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"1136",desc:"BICARBONATO DE SODIO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1137",desc:"CHANTILLY",unit:"LT",cat:"CONFEITARIA"},
+  {cod:"1138",desc:"MAIONESE HELLMANNS",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1139",desc:"MAC.OVOS",unit:"FD",cat:"PADARIA E MASSAS"},
+  {cod:"1140",desc:"CHOCO BALL MICRO POWER AO LEITE/BCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1141",desc:"CHOCO GIROS MAVALERIO COLORIDO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1142",desc:"BOV CONG DENVER STEAK LAS PIEDRAS FAMILY SELECTION",unit:"GR",cat:"CARNES E AVES"},
+  {cod:"1143",desc:"BOV CONG FRALDAO",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"1144",desc:"SUCO CONCENTRADO MARACUJA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1145",desc:"VINAGRE BALSAMICO",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1146",desc:"ALCAPARRA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1147",desc:"ALCACHOFRA CORACAO",unit:"LA",cat:"SECOS E MERCEARIA"},
+  {cod:"1148",desc:"GERGELIM BRANCO S/CASCA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1149",desc:"AZEITE SACHE",unit:"CX",cat:"SECOS E MERCEARIA"},
+  {cod:"1150",desc:"ACHOCO.OVOMALTINE FLOCOS",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1151",desc:"BISC.TRITURADO NEGRESCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1152",desc:"FARINHA MILHO BIJU FLOCADA",unit:"FD",cat:"PADARIA E MASSAS"},
+  {cod:"1153",desc:"ERVAS FINAS",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1154",desc:"ACAFRAO TOSCANA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1155",desc:"CREME CROCANTE OVOMALTINE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1156",desc:"AMENDOIM METADES",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1157",desc:"OREGANO",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1158",desc:"PIMENTA CALABRESA",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"1159",desc:"CHIMICHURRI",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1160",desc:"EMUSTAB DR SELECTA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1161",desc:"PIMENTA MOIDA PURA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1162",desc:"POLENTA SINHA",unit:"FD",cat:"PADARIA E MASSAS"},
+  {cod:"1163",desc:"PAPRICA PICANTE",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1164",desc:"CASTANHA DO PARA",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1167",desc:"CHOPP HEINEKEN BARRIL 50L",unit:"BR",cat:"CERVEJAS E CHOPPS"},
+  {cod:"1168",desc:"CHOPP LAGUNITAS IPA BARRIL",unit:"BR",cat:"CERVEJAS E CHOPPS"},
+  {cod:"1169",desc:"GAVETA PARA BORRA DE CAFE EM INOX",unit:"PC",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1170",desc:"TAMPER 58 MM NITROJET",unit:"PC",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1171",desc:"SUPORTE P/TAMPER INOX",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1172",desc:"PITCHER 12 OZ - 350ML",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1173",desc:"FILTRO CARVAO ATIV. POU 7",unit:"PC",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1174",desc:"PITCHER 20 OZ - 600ML",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1175",desc:"DETERGENTE MAQ DE LAVAR LOUCA 5 LITROS",unit:"GL",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1176",desc:"BIO SEC 5L SECANTE PARA MAQUINA",unit:"GL",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1177",desc:"BIO GRILL 5LT",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1180",desc:"DETERGENTE NEUTRO 5L",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1181",desc:"DESINFETANTE 5 LITROS FLORAL",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1182",desc:"ROLO 28X240M MULTIUSO",unit:"RL",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1183",desc:"ESPONJA DUPLA FACE",unit:"PT",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1184",desc:"PAPEL TOALHA 2D IPEL TRENDS 22,5CM X 20,5",unit:"FD",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1185",desc:"FIBRAX PRETO -",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1186",desc:"PAPEL HIG ROLAO FOLHA DUPLA",unit:"FD",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1187",desc:"CABO METALICO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1188",desc:"BOB PICOTADA",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1189",desc:"T-COZINHA CLARA MAX ROLO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1190",desc:"VASSOURA S/ CABO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1191",desc:"RODO 45CM S/CABO PLASTICO CINZA",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1192",desc:"AVENTAL M EMBORRACHADO - BRANCO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1193",desc:"SPRAY ALCOOL 70%",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1194",desc:"HOME SPRAY",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1195",desc:"LIMPA ALUMINIO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1196",desc:"LUVA NITRILICA PRETA G",unit:"CX",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1197",desc:"LUVA NITRILICA PRETA M",unit:"CX",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1199",desc:"COPO 25ML PS C/100 CRISTALCOPO",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1201",desc:"CAIXA DE WAFFLE NO PALITO",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1202",desc:"LUVA LIMPEZA AMARELA M",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1203",desc:"PAPEL HIG. F. DUPLA",unit:"FD",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1204",desc:"PORTA COMANDA 90CM ALUMINIO",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1205",desc:"PANO MICROFIBRA 30X30 COLORIDO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1206",desc:"SABONETE PEROLADO SEM FRAGRANCIA",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1207",desc:"FIBRA FIBRACO SUPER PESADA",unit:"PT",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1208",desc:"BOB TERMICA 80X40M",unit:"CX",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1209",desc:"BLOCO RECIBO C/ CANHOTO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1211",desc:"ALCOOL LIQUIDO 46%",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1212",desc:"MAC DECRUST DESINCRUSTANTE CONCENTRADO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1213",desc:"ESPONJA MULTIUSO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1215",desc:"LIXEIRA 50L C/ PEDAL PRETA",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1216",desc:"RODO LIMPA VIDROS 25CM",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1217",desc:"MACARICO",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1218",desc:"COPO 180ML CRISTALCOPO 25X100 TRANSP.",unit:"CX",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1219",desc:"PASTA C/ ELASTICO A4 OFICIO TRANSP.",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1220",desc:"PAPEL MANTEIGA",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1223",desc:"SERIGRAFIA TELA UN.ENC",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1224",desc:"CALI / BOWL KRAFT",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1225",desc:"IMPRESSOS PERSONALIZADOS DE PAPEL",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1226",desc:"TAMPA BICO BRANCA PACK",unit:"PCT",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1227",desc:"KIT POTE TAMPA 1000ML REDONDO PRAFESTA",unit:"CX",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1228",desc:"KIT POTE TAMPA 500ML REDONDO PRAFESTA",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1229",desc:"AVENTAL VINIL BRANCO CURTO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1230",desc:"RODO LAVA PISO VERDE/AMARELO C/CABO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1231",desc:"RODO PIA MULTIUSO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1232",desc:"SACOLA DE PAPEL PEQUENA",unit:"CX",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1233",desc:"FITA DE CETIM -VERDE",unit:"MT",cat:"SECOS E MERCEARIA"},
+  {cod:"1234",desc:"TAGS DE PRECO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1235",desc:"CAIXA TAKE AWAY WAFFLE",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1236",desc:"DESINFETANTE 5 LITROS LAVANDA",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1244",desc:"SUCO DE PITAYA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1247",desc:"PHEBUS ESTATE ROSE",unit:"GF",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1248",desc:"LA LINDA CHARDONNAY [750ML]",unit:"GF",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1249",desc:"BOBINA PICOTADA 3 KG",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1250",desc:"FARINHA DE MANDIOCA",unit:"FD",cat:"PADARIA E MASSAS"},
+  {cod:"1251",desc:"PAPEL FILME PVC",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1252",desc:"ACUCAR DIAMANTINO",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"1253",desc:"CHOCOLATE GOTAS BRANCO CALLEBAUT",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"1254",desc:"PALMITO PICADO EM CONSERVA",unit:"VD",cat:"SECOS E MERCEARIA"},
+  {cod:"1255",desc:"CHOCOLATE GOTAS AMARGO CALLEBAUT",unit:"PC",cat:"CONFEITARIA"},
+  {cod:"1256",desc:"CAIXA 8L C/ TAMPA REF. 0512 PLEION",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1257",desc:"CAIXA 10L ORGANIZADORA S-550 C/TAMPA DEKACRON",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1258",desc:"POTE 2000ML TRANSPARENTE C TAMPA",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1259",desc:"BITTER SAN BASILE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1260",desc:"WHISKY WILD TURKEY 101 700 ML",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1261",desc:"LICOR STOCK PEACH",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1263",desc:"QUEIJO GOUDA REDONDO S.VICENTE 3KG",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1264",desc:"XAROPE MONIN CURACAU BLUE",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1265",desc:"TARTELETE DE LIMÃO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1267",desc:"COOKIE CLASSICO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1268",desc:"ARROZ ARBORIO",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1269",desc:"LICOR SAN BASILE [TRIPLE SEC]",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1270",desc:"DAMASCO SECO 1KG",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1272",desc:"CRAKER PERSONALIZADO DRINKS",unit:"PACOTE",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"1273",desc:"GRAPEFRUIT MEIA LUA DESIDRATADA",unit:"PACOTE",cat:"HORTIFRUTI"},
+  {cod:"1275",desc:"BOLO DE DOIS AMORES",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1276",desc:"PA COLETORA",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1277",desc:"SUPORTE PARA FIBRA LT",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1278",desc:"SUCO DE LARANJA INTEGRAL",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1279",desc:"FITA TRANSP",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1280",desc:"ALCOOL EM GEL",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1281",desc:"REPELENTE",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1282",desc:"INSETICIDA SPRAY",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1283",desc:"SACO LIXO 100L",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1284",desc:"SACO LIXO 150L",unit:"PT",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1285",desc:"DESENGORDURANTE",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1286",desc:"PAPEL ALUMINIO",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1287",desc:"BISCOITO MAISENA",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"1288",desc:"MELADO DE CANA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1289",desc:"CHOCOLATE LACTA BIS",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1290",desc:"BOBINA PICOTADA 7KG",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1291",desc:"SAL SACHE",unit:"CX",cat:"SECOS E MERCEARIA"},
+  {cod:"1293",desc:"CHANDON RESERVA BRUT [750ML]",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1294",desc:"CHAMPAGNE DOM PERIGNON VINTAGE [750ML]",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1295",desc:"SEMOLINA",unit:"PT",cat:"PADARIA E MASSAS"},
+  {cod:"1296",desc:"PIMENTA BRANCA GRAO",unit:"PT",cat:"HORTIFRUTI"},
+  {cod:"1297",desc:"FUMACA LIQUIDA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1300",desc:"WAFFLE NO PALITO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1301",desc:"LEITE EM PO",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1302",desc:"DOCE DE LEITE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1303",desc:"ROLHA [VINHO]",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1304",desc:"TOPPING GANACHE DE CHOCOLATE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1305",desc:"Vinagrete de Pupunha, abacaxi e pimenta Cambuci",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1306",desc:"MOLHO BECHAMEL",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1307",desc:"CROQUETE DE PERNIL PORCAO",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"1308",desc:"Base Risoto",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1309",desc:"ASINHA PONZU PORCAO",unit:"UN",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1310",desc:"ADICIONAL DE SALADA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1311",desc:"Molho Chipotle",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1312",desc:"Tartare de atum com maça verde pimenta jalapeno e mel de laranjeira",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"1313",desc:"Ceviche de salmão e atum",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"1314",desc:"Chips de banana da terra",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1315",desc:"Guacamole",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1316",desc:"Vinagrete de manga verde com pimenta rosa",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1317",desc:"Geleia de frutas vermelhas",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"1318",desc:"Emulsão mostarda e mel",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1319",desc:"Aioli de limão siciliano",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1320",desc:"Bolinho de siri",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1321",desc:"Croqueta de pernil",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"1322",desc:"Pesto Manjericao",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1323",desc:"Molho barbecue",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1324",desc:"Asinha ponzu assada",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1325",desc:"Pulled Pork",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1326",desc:"Coleslaw",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1327",desc:"Risoto 3 queijos",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1328",desc:"Caldo de legumes",unit:"LT",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1329",desc:"Aioli de alho",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1330",desc:"Alho confit",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1331",desc:"Arroz branco cozido",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1332",desc:"Arroz de coco",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1333",desc:"Creme de cabotia com queijo",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1334",desc:"Redução de Bourbon",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1335",desc:"Molho de Whisky com café",unit:"KG",cat:"DESTILADOS"},
+  {cod:"1336",desc:"Molho Demi glace",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1337",desc:"ADICIONAL RISOTO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1338",desc:"Manteiga citrica",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1339",desc:"Pochuga marinada em especiarias cajun",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1340",desc:"Azeite de manjericao",unit:"LT",cat:"SECOS E MERCEARIA"},
+  {cod:"1341",desc:"Pure cremoso de milho",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1342",desc:"Costelinha suina assada",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1343",desc:"Pesto de rucula",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1344",desc:"Crosta de panko e ervas",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1345",desc:"Lasanha de berinjela",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1346",desc:"Quiche de pupunha com bacon",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1347",desc:"Molho pomodoro",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1351",desc:"BLONDIE DE CHOCOLATE BRANCO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1355",desc:"JIM BEAM MATTE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1356",desc:"REFIL JIM BEAM DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1362",desc:"Cornbread",unit:"KG",cat:"PADARIA E MASSAS"},
+  {cod:"1363",desc:"Focaccia",unit:"KG",cat:"PADARIA E MASSAS"},
+  {cod:"1364",desc:"Massa waffle",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"1365",desc:"Tomate confit",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1366",desc:"Pure de abacaxi",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1367",desc:"Pure de batata roxa",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1368",desc:"Molho Teriyaki",unit:"LT",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1369",desc:"Nhoque de mandioquinha",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1370",desc:"Aioli de limao e coentro",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1371",desc:"Farinha de coco",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1372",desc:"Molho Ceasar",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1373",desc:"Farofa de limao",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1374",desc:"Ciabatta",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"1375",desc:"Massa panqueca",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1376",desc:"Croutons",unit:"KG",cat:"PADARIA E MASSAS"},
+  {cod:"1377",desc:"Molho leite de coco curry e capim limao",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1378",desc:"Molho de goiabada e whisky",unit:"KG",cat:"SECOS E MERCEARIA"},
+  {cod:"1379",desc:"Aili de pimenta cambuci",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1380",desc:"Salsa de repolho com abacaxi e mel",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1381",desc:"Molho de laranja mel e gengibre",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1382",desc:"Tortilhas",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"1383",desc:"Totopo",unit:"KG",cat:"PADARIA E MASSAS"},
+  {cod:"1384",desc:"Brisket",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"1385",desc:"Molho Ranch",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1386",desc:"Macaroni Salad",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1387",desc:"Manteiga de paprica",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1388",desc:"Redução de Balsamico e mel",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1389",desc:"Telha de parmesao",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1390",desc:"Batata bolinha com chimichurri",unit:"KG",cat:"SECOS E MERCEARIA"},
+  {cod:"1391",desc:"Manteiga de chimichurri",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1392",desc:"Peixe branco empanado no tempurá",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1393",desc:"Cheddar cremoso",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1394",desc:"Pao brioche",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"1395",desc:"Pao de forma",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"1396",desc:"Abacaxi caramelizado",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1397",desc:"BROWNIE Á LA MODE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1481",desc:"BOLO BRIGADEIRO BRANCO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1483",desc:"TORNEDOR DE MIGNON",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"1503",desc:"BRUSSCHETTA CAPRESE HAPPY HOUR",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1510",desc:"BACARDI DOSE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1516",desc:"CAYPRESS MERLOT",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1517",desc:"TERRANOBLE CARBENET SAUVIGNON",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1518",desc:"PRIMITIVO HYRIA",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1519",desc:"MADRE TERRA BRUT PINOT NOIR",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1520",desc:"VILA DE FRADES BRAN",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1521",desc:"SANTA JÚLIA FLORES BRANCAS [ORGÂNICO]",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1522",desc:"MADRE TERRA VENTREZ GEWURTZTRAMINER",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1523",desc:"BALSA DE PIEDRA SEMILLÒN",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1524",desc:"MADRE TERRA METAMORFOSE CHARDONN",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1525",desc:"MINIMALISTA ROSÉ",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1527",desc:"VINHO VERDE CONSERVA ROSÉ",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1528",desc:"CLAUDE VAL ROSÉ",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1529",desc:"SAURUS PINOT NOIR ROSE - SCHROEDER - CLONE",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1533",desc:"CERVEJA BLUE MOON",unit:"UN",cat:"CERVEJAS E CHOPPS"},
+  {cod:"1539",desc:"CAFE DA MANHA LIVRE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1554",desc:"Purê de manga",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1555",desc:"Xarope de açucar",unit:"LT",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"1556",desc:"Albumina",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1557",desc:"Redução de frutas vermelhas",unit:"LT",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1558",desc:"Saque",unit:"LT",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1559",desc:"Pure de Yuzu",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1560",desc:"St Pierre Ginger Lata",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"1561",desc:"Pure de coco",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1562",desc:"Xarope de mel",unit:"LT",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"1563",desc:"PENICILIN",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1564",desc:"ESPRESSO MARTINI",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1565",desc:"ESPRESSO CLASSICO PARA DRINK",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1566",desc:"Licor de laranja",unit:"LT",cat:"HORTIFRUTI"},
+  {cod:"1567",desc:"STRAWBERRY MILKSHAKE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1568",desc:"ESPUMA CITRICA",unit:"GR",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1569",desc:"CROQUETAS DE COSTELA ALMOÇO",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"1570",desc:"SORVETE",unit:"PT",cat:"CONFEITARIA"},
+  {cod:"1572",desc:"MOLHO TARE",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1573",desc:"FILTRO DE PAPEL CAFÉ",unit:"CX",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1574",desc:"DIFUSOR SACHE PERFUMADO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1575",desc:"Vinho branco Minimalista pinot Grigio",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1579",desc:"TOMATE CEREJA BDJ",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1580",desc:"BROTO ALFAFA BDJ",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1581",desc:"DESINCRUSTANTE 5L",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1582",desc:"PRESUNTO FATIADO",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1583",desc:"PAO DE QUEIJO",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1587",desc:"VINHO FINO BRANCO SECO, VILA DE FRADES 750ML",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1589",desc:"VINHO FINO ROSE MEIO SECO, MINIMALISTA SYRAH-MALBEC-MERLOT ROSE 750ML",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1590",desc:"VINHO FINO TINTO SECO, VILA DE FRADES TINTO 750ML",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1591",desc:"IOGURTE GREGO",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1592",desc:"ALFACE MINI",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1596",desc:"PACOTE GELO CUBO 3KG",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"1597",desc:"VINHO ALMADEN BRANCO 5L",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1598",desc:"RED BULL S/ AÇÚCAR",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"1599",desc:"RED BULL TROPICAL",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"1600",desc:"VODKA SMIRNOFF",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1601",desc:"BEBIDA MISTA SMIRNOFF ICE TRADICIONAL 275 ML",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1602",desc:"LARANJA MEIA LUA DESIDRATADA",unit:"PACOTE",cat:"HORTIFRUTI"},
+  {cod:"1603",desc:"BALDE PLASTICO 15L",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1604",desc:"XAROPE MONIN MORANGO",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"1605",desc:"GIRLS NIGHT OUT",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1606",desc:"CHURROS COM DOCE DE LEITE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1607",desc:"CAMPARI APEROL NIGHT",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1608",desc:"WINE NIGHT",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1609",desc:"GIRLS NIGHT OUT DESAMIGADAS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1610",desc:"ÁGUA MINERAL 20L RETORNÁVEL",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1611",desc:"FIO 50M",unit:"ROLO",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1612",desc:"MEXEDOR DRINK CRISTAL C/ 240",unit:"PACOTE",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"1613",desc:"BANDEIJA HF 20UN",unit:"PACOTE",cat:"SECOS E MERCEARIA"},
+  {cod:"1614",desc:"ETIQUETAS",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1615",desc:"PIMENTÕES COLORIDOS",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1616",desc:"AVOCADO BABY",unit:"PACOTE",cat:"HORTIFRUTI"},
+  {cod:"1618",desc:"ROLHA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1621",desc:"CAFE PILAO GRAOS EXPRESSO 1KG",unit:"UN",cat:"BEBIDAS NÃO ALCOÓLICAS"},
+  {cod:"1622",desc:"VINHO GARAFAO TINTO SECO",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1623",desc:"LEITE ZERO LACTOSE",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1624",desc:"BATATA EM FLOCOS 1KG",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1625",desc:"GELEIA BRILHO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1626",desc:"MAC PENNE",unit:"CX",cat:"PADARIA E MASSAS"},
+  {cod:"1629",desc:"RUM HAVANA 3 ANOS",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1633",desc:"BOULEVARDIER",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1635",desc:"MENTA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1638",desc:"GIN NIB ORIGINAL 5L",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1639",desc:"GIN NIB ORIGINAL 1L",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1640",desc:"MADRE TERRA VENTREZ VINHO BRANCO SECO 750 ML",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1641",desc:"CALI DATE NIGHT",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1642",desc:"CATUPIRY TRADICIONAL BISN",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1643",desc:"MOLHO INGLES",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1644",desc:"ALHO EM FLOCOS KG",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1645",desc:"XAROPE PURE LE FRUIT PERA WILLIANS",unit:"UN",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"1646",desc:"GRANITO KG",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"1652",desc:"CHOPP HAPPY HOUR",unit:"UN",cat:"CERVEJAS E CHOPPS"},
+  {cod:"1653",desc:"NATA POTE",unit:"PT",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1654",desc:"LONG ISLAND ICED TEA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1655",desc:"MIX AMORA E MORANGO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1656",desc:"PANO DE PISO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1657",desc:"PANO ALGODAO ALVEJADO",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1660",desc:"Vodka base",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1661",desc:"Vodka premium - Ciroc",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1662",desc:"Vodka premium - Grey goose",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1663",desc:"Vodka premium - Haku",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1664",desc:"Gin base",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1665",desc:"Gin premium - Tanqueray",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1666",desc:"Gin premium - Beefeater",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1667",desc:"Gin premium - Roku",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1668",desc:"Gin premium - Bombay",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1669",desc:"Negroni premium",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1670",desc:"Cachaça base",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1671",desc:"Cachaça premium - Salinas",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1672",desc:"Cachaça premium - Weber hause",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1676",desc:"NIB BITTER CHOCOLATE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1677",desc:"MINIMALISTA MALBEC",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1680",desc:"DOCINHOS UND",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1681",desc:"LICOR BALLENA MORANGO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1682",desc:"LICOR 43 [CHOCOLATE]",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1685",desc:"LARANJA COM CHOCOLATE DESI",unit:"PACOTE",cat:"HORTIFRUTI"},
+  {cod:"1686",desc:"APEROL GARRAFA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1689",desc:"DOSE APEROL",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1693",desc:"KETCHUP",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1694",desc:"VEDA ROSCA",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1695",desc:"ENGATE FLEXIVEL",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1696",desc:"ALICATE 10",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1697",desc:"CHAVE INGLESA",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1698",desc:"EMBALAGEM RET CRISTAL",unit:"UN",cat:"DESCARTÁVEIS E EMBALAGENS"},
+  {cod:"1699",desc:"HAMBURGUEIRA",unit:"FD",cat:"PADARIA E MASSAS"},
+  {cod:"1700",desc:"JAGERINHA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1701",desc:"JAGER BOMB",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1703",desc:"WHITE TURKEY DOSE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1704",desc:"Molho de pimenta",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1705",desc:"Pimenta jalapeno",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1706",desc:"Chips de batata doce",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1707",desc:"Vinagre de vinho branco",unit:"LT",cat:"SECOS E MERCEARIA"},
+  {cod:"1708",desc:"Mel de laranjeira",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1709",desc:"Pimenta rosa",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1710",desc:"Mostarda Dijon",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1711",desc:"Vinagre de maçã",unit:"LT",cat:"SECOS E MERCEARIA"},
+  {cod:"1712",desc:"Lombo Suíno",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1713",desc:"Suco de abacaxi",unit:"LT",cat:"HORTIFRUTI"},
+  {cod:"1715",desc:"Glace",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1716",desc:"Aparas de carne",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1717",desc:"MINIMALISTA PINOT GRIGIO - BRANCO",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1718",desc:"NEGRONI CHOCOLATE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1720",desc:"MINI QUINDIM",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1721",desc:"GOMA XANTANA",unit:"KG",cat:"XAROPES E INSUMOS DE BAR"},
+  {cod:"1722",desc:"ZIMBRO",unit:"KG",cat:"SECOS E MERCEARIA"},
+  {cod:"1723",desc:"COENTRO EM GRÃO",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1724",desc:"PIMENTA CAIENA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1725",desc:"MOLHO BRANCO",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1727",desc:"BATATA MONALISA",unit:"KG",cat:"SECOS E MERCEARIA"},
+  {cod:"1728",desc:"PEITO BOVINO",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"1729",desc:"IOGURTE NATURAL",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1730",desc:"SOUR CREAM",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1731",desc:"CREME CULINARIO",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1732",desc:"PÃO FATIADO",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1733",desc:"CAPIM LIMÃO",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1734",desc:"MADRE TERRA AURAZ ROSE",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1736",desc:"CHOPP BLUE MOON - BARRIL",unit:"BR",cat:"CERVEJAS E CHOPPS"},
+  {cod:"1737",desc:"LICOR SAN BASILE [ALKERMES]",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1738",desc:"LICOR SAN BASILE [AMARO]",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1739",desc:"COURMAYEUR MOSCATEL",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1740",desc:"FLORES NEGRAS PINOT NOIR",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1741",desc:"CONTRASTO ROSSO IGT",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1742",desc:"LA VITTO",unit:"UN",cat:"VINHOS E ESPUMANTES"},
+  {cod:"1743",desc:"PRIMITIVO ROSSO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1744",desc:"CAR. OVINA STINCO DO CORDEIRO",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"1746",desc:"MAMAO FORMOSA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1747",desc:"MELAO GRADO",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1748",desc:"GUARDANAPO DE MESA",unit:"UN",cat:"LIMPEZA E HIGIENE"},
+  {cod:"1749",desc:"ANEL VEDAÇÃO P/ VASO SANITARIO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1750",desc:"SELANTE",unit:"UN",cat:"EQUIPAMENTOS E UTENSÍLIOS"},
+  {cod:"1752",desc:"GREY GROOSE EXPERIENSE",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1753",desc:"SABOR LIMÃO",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1754",desc:"SABOR ABACAXI",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1755",desc:"SABOR MORANGO",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1756",desc:"SABOR MARACUJÁ",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1757",desc:"GREY GROOSE EXPERIENSE FINAL DE SEMANA",unit:"UN",cat:"DESTILADOS"},
+  {cod:"1759",desc:"CHÁ QUENTE TWININGS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1760",desc:"OVO BANDEIJA",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1761",desc:"PALHA ITALIANA DE LIMÃO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1763",desc:"CARNE SECA",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"1765",desc:"FARINHA DE TRIGO PASTA FRESCA",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1766",desc:"BERGAMOTA",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1767",desc:"PASTEL DE BELEM",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1768",desc:"PO PARA DECORACAO BRILHO",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1769",desc:"CREME DE ABOBORA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1770",desc:"SALADA DE RUCULA COM LARANJA",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1771",desc:"SCHIACCIATA ITALIANA ASSADA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1772",desc:"MIGNON GRELHADO COM RAGU DE COGUMELOS",unit:"UN",cat:"CARNES E AVES"},
+  {cod:"1773",desc:"SALMAO GRELHADO AO MOLHO DE IOGURTE",unit:"UN",cat:"FRUTOS DO MAR"},
+  {cod:"1774",desc:"RAVIOLI DE QUEIJO AO CREME DE GOUDA",unit:"UN",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1775",desc:"CHEESECAKE BASCA COM DOCE DE LEITE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1776",desc:"PAVLOVA COM CREME DE LARANJA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1780",desc:"CAPA CONTRA FILE",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"1782",desc:"UVA PASSAS BRANCA",unit:"UN",cat:"SECOS E MERCEARIA"},
+  {cod:"1784",desc:"LICORES PORTO FARIA GARRAFA",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1785",desc:"REGUA DE SHOTS PORTO FARIA",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1786",desc:"CAIPIRINHA PORTO FARIA",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1787",desc:"MOSCOW MULE PORTO FARIA",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1788",desc:"BANANA FRESH",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1789",desc:"NECTAR PORTO FARIA",unit:"UN",cat:"LICORES E APERITIVOS"},
+  {cod:"1790",desc:"FLOR DE CANELA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1797",desc:"BOLO DE OVOMALTINE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1799",desc:"BOLO DE FRUTAS VERMELHAS",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1800",desc:"TARTELETE DE CHOCOLATE",unit:"UN",cat:"CONFEITARIA"},
+  {cod:"1801",desc:"Lemon Whells",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1802",desc:"Tomate recheado",unit:"UN",cat:"HORTIFRUTI"},
+  {cod:"1803",desc:"CAPPUCCINO DE NUTELLA",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1804",desc:"Arancini massa",unit:"UN",cat:"PADARIA E MASSAS"},
+  {cod:"1805",desc:"Queijo Ementhal",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1806",desc:"Crumble de Pistache",unit:"UN",cat:"CARDÁPIO"},
+  {cod:"1807",desc:"Farinha de Pistache",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"1808",desc:"Arancini Recheio",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1809",desc:"Swrimp N Pop",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"1810",desc:"Camarão Cinza",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1811",desc:"Camarão Cinza a milanesa",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1812",desc:"Molho de queijo",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1813",desc:"Creme de Pesto",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1814",desc:"Creme de Palmito",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1815",desc:"Purê de Batata",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1816",desc:"Crosta de Coco com Pistache",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1817",desc:"Massa Páprica",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1818",desc:"Ravioli Massa Páprica",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1820",desc:"CUP CAKE CHOCOLATE E BAUNILHA",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"1821",desc:"CUP CAKE PISTACHE E CHOCOLATE",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"1822",desc:"Carvão ativado em pó",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1823",desc:"Massa Negra",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1824",desc:"Robalo empanado no tempurá",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"1825",desc:"Tortellini Recheio",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1826",desc:"Tortellini",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1827",desc:"Polvo cozido",unit:"KG",cat:"FRUTOS DO MAR"},
+  {cod:"1828",desc:"Stinco de cordeiro pronto",unit:"KG",cat:"CARNES E AVES"},
+  {cod:"1829",desc:"Ragu de cogumelos",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1830",desc:"Molho 4 queijos",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1831",desc:"Molho Maracujá",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1832",desc:"Brownie pronto",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1833",desc:"Mousse de chocolate branco [entremet]",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"1834",desc:"Glaçagem epelhada",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1835",desc:"Crumble de abacaxi e coco",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1836",desc:"Recheio de abacaxi e coco",unit:"KG",cat:"HORTIFRUTI"},
+  {cod:"1837",desc:"Geleia de abacaxi",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"1838",desc:"Creme de abacaxi",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1840",desc:"Pasta saborizante de abacaxi",unit:"KG",cat:"CONFEITARIA"},
+  {cod:"1841",desc:"Creme de leite fresco 35%",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1842",desc:"Mascarpone",unit:"KG",cat:"LATICÍNIOS E OVOS"},
+  {cod:"1843",desc:"Massa Cannoli",unit:"KG",cat:"PADARIA E MASSAS"},
+  {cod:"1844",desc:"Creme de laranja",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1845",desc:"Cardamomo",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1846",desc:"Crumble",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+  {cod:"1847",desc:"Tuile Cristal",unit:"KG",cat:"PREPARADOS DE COZINHA"},
+];
+
+
+/* ── STATE ──────────────────────────────────── */
+let nome='',data='',setor='',saved={},submitted=false,saving=false;
+
+/* ── INIT ───────────────────────────────────── */
+document.addEventListener('DOMContentLoaded',()=>{
+  const d=new Date();
+  document.getElementById('inp-data').value=
+    d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  document.querySelectorAll('.setor-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.querySelectorAll('.setor-btn').forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel'); setor=b.dataset.s; valLogin();
+    });
+  });
+  document.getElementById('inp-nome').addEventListener('input',valLogin);
+  document.getElementById('inp-data').addEventListener('change',valLogin);
+});
+
+function valLogin(){
+  const ok=document.getElementById('inp-nome').value.trim().length>1
+    && document.getElementById('inp-data').value && setor;
+  document.getElementById('btn-start').disabled=!ok;
+}
+
+/* ── SCREENS ─────────────────────────────────── */
+function showScreen(s){
+  document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+  document.getElementById('screen-'+s).classList.add('active');
+  if(s==='admin') loadAdmin();
+}
+function toggleAdmin(){
+  const a=document.getElementById('screen-admin').classList.contains('active');
+  showScreen(a?'inventory':'admin');
+}
+
+/* ── FIREBASE KEY ────────────────────────────── */
+function fbKey(){
+  return data+'_'+setor.replace(/\s+/g,'_')+'_'+
+    nome.replace(/[^a-zA-Z0-9]/g,'_').substring(0,20).toLowerCase();
+}
+
+/* ── START ───────────────────────────────────── */
+async function startInventory(){
+  nome=document.getElementById('inp-nome').value.trim();
+  data=document.getElementById('inp-data').value;
+  document.getElementById('hdr-setor').textContent=setor+' — '+nome;
+  document.getElementById('hdr-date').textContent=ptDate(data);
+  document.getElementById('hdr-info').classList.remove('gone');
+  document.getElementById('btn-admin').classList.remove('gone');
+  try{
+    const snap=await db.ref('/inventario/'+fbKey()).get();
+    if(snap.exists()){const v=snap.val();saved=v.itens||{};submitted=v.status==='enviado';}
+    else{saved={};submitted=false;}
+  }catch{saved={};submitted=false;}
+  buildList();
+  showScreen('inventory');
+  if(submitted){
+    document.getElementById('btn-enviar').disabled=true;
+    document.getElementById('btn-enviar').textContent='✅ Já Enviado';
+    document.getElementById('sub-banner').classList.remove('gone');
+    document.getElementById('btn-gravar').disabled=true;
+    showToast('Esta contagem já foi enviada.');
+  }
+}
+
+/* ── BUILD LIST ──────────────────────────────── */
+function buildList(){
+  const con=document.getElementById('prod-list');
+  con.innerHTML='';
+  const cats={};
+  PRODUCTS.forEach(p=>{if(!cats[p.cat])cats[p.cat]=[];cats[p.cat].push(p);});
+  Object.keys(cats).sort().forEach((cat,i)=>{
+    const items=cats[cat];
+    const fil=items.filter(p=>saved[p.cod]!=null).length;
+    const sec=document.createElement('div');
+    sec.className='cat-sec'+(i===0?' open':'');
+    sec.id='cat'+i;
+    sec.innerHTML=`
+      <div class="cat-hdr" onclick="togCat(${i})">
+        <div class="cat-left">
+          <span class="cat-lbl">${catEmoji(cat)} ${cat}</span>
+          <span class="cat-badge${fil?' lit':''}" id="bdg${i}">${fil}/${items.length}</span>
+        </div>
+        <svg class="cat-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="cat-body" id="body${i}">
+        ${items.map(p=>pRow(p)).join('')}
+      </div>`;
+    con.appendChild(sec);
+    if(fil>0) sec.classList.add('open');
+  });
+  updProg();
+}
+
+function pRow(p){
+  const v=saved[p.cod]!=null?saved[p.cod]:'';
+  const ro=submitted?'readonly':'';
+  return `
+    <div class="p-row${v!==''?' lit':''}" id="row${p.cod}">
+      <div class="p-info">
+        <div class="p-desc">${p.desc}</div>
+        <div class="p-cod">Cód. ${p.cod}</div>
+      </div>
+      <div class="p-unit">${p.unit}</div>
+      <input type="number" class="qty-inp${v!==''?' filled':''}"
+        id="q${p.cod}" value="${v}" placeholder="0"
+        min="0" step="0.001" ${ro}
+        oninput="onQty('${p.cod}',this)">
+    </div>`;
+}
+
+function onQty(cod,el){
+  const v=el.value;
+  if(v!==''&&!isNaN(parseFloat(v))){
+    saved[cod]=parseFloat(v);el.classList.add('filled');
+    document.getElementById('row'+cod).classList.add('lit');
+  }else{
+    delete saved[cod];el.classList.remove('filled');
+    document.getElementById('row'+cod).classList.remove('lit');
+  }
+  updProg();updBadges();
+}
+
+function togCat(i){document.getElementById('cat'+i).classList.toggle('open');}
+
+function updProg(){
+  const fil=Object.keys(saved).length;
+  document.getElementById('prog-fill').style.width=(fil/PRODUCTS.length*100)+'%';
+  document.getElementById('prog-txt').textContent=fil+' / '+PRODUCTS.length+' itens';
+}
+
+function updBadges(){
+  const cats={};
+  PRODUCTS.forEach(p=>{if(!cats[p.cat])cats[p.cat]=[];cats[p.cat].push(p);});
+  Object.keys(cats).sort().forEach((cat,i)=>{
+    const fil=cats[cat].filter(p=>saved[p.cod]!=null).length;
+    const b=document.getElementById('bdg'+i);
+    if(b){b.textContent=fil+'/'+cats[cat].length;b.className='cat-badge'+(fil?' lit':'');}
+  });
+}
+
+function catEmoji(c){
+  const m={
+    'CARDÁPIO':'🍽️','CARNES E AVES':'🥩','FRUTOS DO MAR':'🦐',
+    'LATICÍNIOS E OVOS':'🧀','HORTIFRUTI':'🥬','PADARIA E MASSAS':'🥖',
+    'CONFEITARIA':'🍰','SECOS E MERCEARIA':'🛒','BEBIDAS NÃO ALCOÓLICAS':'💧',
+    'CERVEJAS E CHOPPS':'🍺','DESTILADOS':'🥃','VINHOS E ESPUMANTES':'🍷',
+    'LICORES E APERITIVOS':'🍸','XAROPES E INSUMOS DE BAR':'🧪',
+    'PREPARADOS DE COZINHA':'👨‍🍳','DESCARTÁVEIS E EMBALAGENS':'📦',
+    'LIMPEZA E HIGIENE':'🧹','EQUIPAMENTOS E UTENSÍLIOS':'🔧'
+  };
+  return m[c]||'📋';
+}
+
+/* ── SEARCH ──────────────────────────────────── */
+function filterProds(q){
+  q=q.toLowerCase().trim();
+  document.querySelectorAll('.p-row').forEach(r=>{
+    const desc=r.querySelector('.p-desc').textContent.toLowerCase();
+    const cod=r.querySelector('.p-cod').textContent.toLowerCase();
+    r.style.display=(!q||desc.includes(q)||cod.includes(q))?'':'none';
+  });
+  document.querySelectorAll('.cat-sec').forEach(s=>{
+    const vis=[...s.querySelectorAll('.p-row')].some(r=>r.style.display!=='none');
+    s.style.display=vis?'':'none';
+    if(q&&vis) s.classList.add('open');
+  });
+}
+
+/* ── SAVE ────────────────────────────────────── */
+async function saveProgress(){
+  if(saving||submitted)return;
+  saving=true;
+  const btn=document.getElementById('btn-gravar');
+  btn.textContent='⏳ Salvando...';
+  try{
+    await db.ref('/inventario/'+fbKey()).set({
+      colaborador:nome,data,setor,status:'andamento',
+      timestamp:Date.now(),itens:saved
+    });
+    showToast('✅ Rascunho salvo!');
+  }catch{showToast('❌ Falha na conexão.');}
+  finally{saving=false;btn.textContent='💾 Gravar';}
+}
+
+/* ── SUBMIT ──────────────────────────────────── */
+function confirmEnvio(){document.getElementById('overlay').classList.add('on');}
+function closeModal(){document.getElementById('overlay').classList.remove('on');}
+
+async function submitInventory(){
+  closeModal();
+  try{
+    await db.ref('/inventario/'+fbKey()).set({
+      colaborador:nome,data,setor,status:'enviado',
+      timestamp:Date.now(),tsEnvio:Date.now(),itens:saved
+    });
+    submitted=true;
+    document.getElementById('btn-enviar').disabled=true;
+    document.getElementById('btn-enviar').textContent='✅ Enviado!';
+    document.getElementById('sub-banner').classList.remove('gone');
+    document.querySelectorAll('.qty-inp').forEach(i=>i.readOnly=true);
+    showToast('🎉 Contagem enviada com sucesso!',4000);
+  }catch{showToast('❌ Erro ao enviar. Tente novamente.');}
+}
+
+/* ── EXPORT SETOR ────────────────────────────── */
+function exportSetor(){
+  const rows=[['CÓD. INT.','DESCRIÇÃO INTERNA','UN.VENDA','QUANTIDADE','SETOR','DATA','COLABORADOR']];
+  PRODUCTS.forEach(p=>{
+    rows.push([p.cod,p.desc,p.unit,saved[p.cod]!=null?saved[p.cod]:'',setor,data,nome]);
+  });
+  doXlsx(rows,'Contagem_'+setor.replace(/\s/g,'_')+'_'+data);
+}
+
+/* ── EXPORT CONSOLIDADO ──────────────────────── */
+async function exportConsolidado(){
+  showToast('⏳ Carregando dados...',60000);
+  try{
+    const snap=await db.ref('/inventario').get();
+    if(!snap.exists()){showToast('Nenhuma contagem encontrada.');return;}
+    const rows=[['CÓD. INT.','DESCRIÇÃO INTERNA','UN.VENDA','QUANTIDADE','SETOR','DATA','COLABORADOR','STATUS']];
+    Object.values(snap.val()).forEach(e=>{
+      const it=e.itens||{};
+      PRODUCTS.forEach(p=>{
+        const q=it[p.cod];
+        if(q!=null) rows.push([p.cod,p.desc,p.unit,q,e.setor,e.data,e.colaborador,e.status]);
+      });
+    });
+    doXlsx(rows,'Contagem_Consolidada_'+new Date().toISOString().slice(0,10));
+    showToast('✅ Exportado!');
+  }catch{showToast('❌ Erro ao exportar.');}
+}
+
+function doXlsx(rows,fname){
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:12},{wch:44},{wch:10},{wch:12},{wch:18},{wch:12},{wch:22},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'Contagem');
+  XLSX.writeFile(wb,fname+'.xlsx');
+}
+
+/* ── ADMIN LIST ──────────────────────────────── */
+async function loadAdmin(){
+  const con=document.getElementById('admin-list');
+  con.innerHTML='<p style="color:var(--muted);font-size:13px;padding:10px 0">Carregando...</p>';
+  const fd=document.getElementById('f-data').value;
+  const fs=document.getElementById('f-setor').value;
+  try{
+    const snap=await db.ref('/inventario').get();
+    if(!snap.exists()){con.innerHTML='<p style="color:var(--muted);text-align:center;padding:32px">📭 Nenhuma contagem encontrada.</p>';return;}
+    let ent=Object.entries(snap.val()).map(([k,v])=>({...v,_k:k}));
+    if(fd) ent=ent.filter(e=>e.data===fd);
+    if(fs) ent=ent.filter(e=>e.setor===fs);
+    ent.sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+    if(!ent.length){con.innerHTML='<p style="color:var(--muted);text-align:center;padding:32px">🔍 Nenhum resultado.</p>';return;}
+    con.innerHTML=ent.map(e=>`
+      <div class="cnt-card">
+        <div class="cnt-info">
+          <strong>${e.setor}</strong>
+          <span>${e.colaborador} · ${ptDate(e.data)}</span>
+          <span>${Object.keys(e.itens||{}).length} itens contados</span>
+        </div>
+        <span class="sta ${e.status==='enviado'?'env':'and'}">
+          ${e.status==='enviado'?'✅ Enviado':'⏳ Rascunho'}</span>
+        <button class="btn-sm" onclick="exportEntry('${e._k}')">Excel</button>
+      </div>`).join('');
+  }catch{con.innerHTML='<p style="color:var(--muted);text-align:center;padding:32px">❌ Erro ao carregar.</p>';}
+}
+
+async function exportEntry(key){
+  const snap=await db.ref('/inventario/'+key).get();
+  if(!snap.exists())return;
+  const e=snap.val();
+  const rows=[['CÓD. INT.','DESCRIÇÃO INTERNA','UN.VENDA','QUANTIDADE','SETOR','DATA','COLABORADOR']];
+  const it=e.itens||{};
+  PRODUCTS.forEach(p=>{rows.push([p.cod,p.desc,p.unit,it[p.cod]!=null?it[p.cod]:'',e.setor,e.data,e.colaborador]);});
+  doXlsx(rows,'Contagem_'+e.setor.replace(/\s/g,'_')+'_'+e.data);
+}
+
+/* ── UTILS ───────────────────────────────────── */
+function ptDate(s){if(!s)return'';const[y,m,d]=s.split('-');return d+'/'+m+'/'+y;}
+let _tt;
+function showToast(msg,dur=3200){
+  clearTimeout(_tt);
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('on');
+  _tt=setTimeout(()=>el.classList.remove('on'),dur);
+}
+</script>
+</body>
+</html>
