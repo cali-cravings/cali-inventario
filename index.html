@@ -297,6 +297,7 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
     </div>
 
     <button class="btn-go" id="btn-start" onclick="startInventory(this.dataset.forceNew==='true')" disabled>Iniciar Contagem →</button>
+    <button class="btn-ver-cont" onclick="verContagens()">&#128203; Ver Contagens Finalizadas</button>
     <p class="login-hint">Rascunhos são salvos automaticamente. Você pode continuar depois.</p>
   </div>
 </div>
@@ -1988,12 +1989,17 @@ async function doDelete(){
     document.getElementById('del-erro').style.display='block';
     document.getElementById('del-senha').value='';return;
   }
+  const keyToDelete=_delKey; // salva antes de fechar o modal
   closeDelModal();
+  if(!keyToDelete){showToast('Erro: contagem nao identificada.');return;}
   try{
-    await db.ref('/inventario/'+_delKey).remove();
-    showToast('Contagem excluida.');
+    await db.ref('/inventario/'+keyToDelete).remove();
+    showToast('Contagem excluida com sucesso!');
     loadAdmin();
-  }catch{showToast('Erro ao excluir.');}
+  }catch(err){
+    showToast('Erro ao excluir: '+err.message);
+    console.error('Delete error:',err);
+  }
 }
 function verContagens(){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
