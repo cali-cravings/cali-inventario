@@ -1904,17 +1904,58 @@ async function exportConsolidado(){
   try{
     const snap=await db.ref('/inventario').get();
     if(!snap.exists()){showToast('Nenhuma contagem encontrada.');return;}
-    const rows=[['CÓD. INT.','DESCRIÇÃO INTERNA','UN.VENDA','QUANTIDADE','SETOR','DATA','COLABORADOR','STATUS']];
-    Object.values(snap.val()).forEach(e=>{
+
+    const entries=Object.values(snap.val());
+
+    // ── Aba 1: AGRUPADO por produto ─────────────────────────────
+    // totMap: cod -> { total, detalhes: ["SETOR: qtd", ...] }
+    const totMap={};
+    entries.forEach(e=>{
+      const it=e.itens||{};
+      Object.keys(it).forEach(cod=>{
+        const q=parseFloat(it[cod])||0;
+        if(!totMap[cod]) totMap[cod]={total:0,detalhes:[]};
+        totMap[cod].total+=q;
+        totMap[cod].detalhes.push(e.setor+': '+q);
+      });
+    });
+
+    const rowsAgrup=[['CÓD. INT.','DESCRIÇÃO INTERNA','UN.VENDA','TOTAL GERAL','DETALHES POR SETOR']];
+    PRODUCTS.forEach(p=>{
+      if(totMap[p.cod]){
+        rowsAgrup.push([
+          p.cod,
+          p.desc,
+          p.unit,
+          totMap[p.cod].total,
+          totMap[p.cod].detalhes.join(' | ')
+        ]);
+      }
+    });
+
+    // ── Aba 2: DETALHADO por lançamento ─────────────────────────
+    const rowsDet=[['CÓD. INT.','DESCRIÇÃO INTERNA','UN.VENDA','QUANTIDADE','SETOR','DATA','COLABORADOR','STATUS']];
+    entries.forEach(e=>{
       const it=e.itens||{};
       PRODUCTS.forEach(p=>{
         const q=it[p.cod];
-        if(q!=null) rows.push([p.cod,p.desc,p.unit,q,e.setor,e.data,e.colaborador,e.status]);
+        if(q!=null) rowsDet.push([p.cod,p.desc,p.unit,q,e.setor,e.data,e.colaborador,e.status]);
       });
     });
-    doXlsx(rows,'Contagem_Consolidada_'+new Date().toISOString().slice(0,10));
-    showToast('✅ Exportado!');
-  }catch{showToast('❌ Erro ao exportar.');}
+
+    // ── Gerar Excel com 2 abas ───────────────────────────────────
+    const wb=XLSX.utils.book_new();
+    const wsAgrup=XLSX.utils.aoa_to_sheet(rowsAgrup);
+    wsAgrup['!cols']=[{wch:12},{wch:44},{wch:10},{wch:14},{wch:60}];
+    XLSX.utils.book_append_sheet(wb,wsAgrup,'Consolidado Agrupado');
+
+    const wsDet=XLSX.utils.aoa_to_sheet(rowsDet);
+    wsDet['!cols']=[{wch:12},{wch:44},{wch:10},{wch:12},{wch:18},{wch:12},{wch:22},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,wsDet,'Detalhado por Setor');
+
+    XLSX.writeFile(wb,'Contagem_Consolidada_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    showToast('✅ Exportado com 2 abas!');
+  }catch(err){showToast('❌ Erro ao exportar.');console.error(err);}
 }
 
 function doXlsx(rows,fname){
