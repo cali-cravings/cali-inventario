@@ -4409,62 +4409,86 @@ async function exportConsolidado(){
     if(!snap.exists()){showToast('Nenhuma contagem encontrada.');return;}
 
     const entries=Object.values(snap.val());
+    const now=new Date();
+    const dtStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR');
 
-    // ── Aba 1: AGRUPADO por produto ─────────────────────────────
-    // totMap: cod -> { total, detalhes: ["SETOR: qtd", ...] }
+    // ── Somar quantidades por produto ────────────────────────────
     const totMap={};
     entries.forEach(e=>{
       const it=e.itens||{};
       Object.keys(it).forEach(cod=>{
         const q=parseFloat(it[cod])||0;
-        if(!totMap[cod]) totMap[cod]={total:0,detalhes:[]};
+        if(q<=0) return;
+        if(!totMap[cod]){totMap[cod]={total:0,detalhes:[]};}
         totMap[cod].total+=q;
         totMap[cod].detalhes.push(e.setor+': '+q);
       });
     });
 
-    const rowsAgrup=[['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','TOTAL GERAL','DETALHES POR SETOR']];
+    // ── Aba 1: Formato padrão Allfood (soma por produto) ─────────
+    // Apenas cabeçalho de colunas
+    const wsData=[
+      ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE']
+    ];
+
+    // Dados agrupados por CLASSE (ordem do template Allfood)
     PRODUCTS.forEach(p=>{
-      if(totMap[p.cod]){
+      if(totMap[p.cod] && totMap[p.cod].total>0){
         const meta=ALLFOOD_META[p.cod]||['',''];
-        rowsAgrup.push([
-          p.cod,
+        wsData.push([
+          parseInt(p.cod)||p.cod,
           p.desc,
           p.unit,
           meta[0],
           meta[1],
-          totMap[p.cod].total,
-          totMap[p.cod].detalhes.join(' | ')
+          totMap[p.cod].total
         ]);
       }
     });
 
-    // ── Aba 2: DETALHADO por lançamento ─────────────────────────
-    const rowsDet=[['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE','SETOR','DATA','COLABORADOR','STATUS']];
+    // ── Aba 2: Detalhado por setor ────────────────────────────────
+    const detData=[
+      ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE','SETOR','COLABORADOR']
+    ];
     entries.forEach(e=>{
       const it=e.itens||{};
       PRODUCTS.forEach(p=>{
         const q=it[p.cod];
-        if(q!=null){
+        if(q!=null&&parseFloat(q)>0){
           const m=ALLFOOD_META[p.cod]||['',''];
-          rowsDet.push([p.cod,p.desc,p.unit,m[0],m[1],q,e.setor,e.data,e.colaborador,e.status]);
+          detData.push([parseInt(p.cod)||p.cod,p.desc,p.unit,m[0],m[1],parseFloat(q),e.setor,e.colaborador]);
         }
       });
     });
 
-    // ── Gerar Excel com 2 abas ───────────────────────────────────
+    // ── Montar workbook ──────────────────────────────────────────
     const wb=XLSX.utils.book_new();
-    const wsAgrup=XLSX.utils.aoa_to_sheet(rowsAgrup);
-    wsAgrup['!cols']=[{wch:8},{wch:44},{wch:8},{wch:18},{wch:22},{wch:14},{wch:55}];
-    XLSX.utils.book_append_sheet(wb,wsAgrup,'Consolidado Agrupado');
 
-    const wsDet=XLSX.utils.aoa_to_sheet(rowsDet);
-    wsDet['!cols']=[{wch:8},{wch:44},{wch:8},{wch:18},{wch:22},{wch:12},{wch:18},{wch:12},{wch:22},{wch:12}];
-    XLSX.utils.book_append_sheet(wb,wsDet,'Detalhado por Setor');
+    const ws1=XLSX.utils.aoa_to_sheet(wsData);
+    ws1['!cols']=[{wch:14},{wch:48},{wch:8},{wch:20},{wch:22},{wch:12}];
+    // Style header row (row index 9 = row 10 in Excel)
+    const hdrRange=XLSX.utils.decode_range(ws1['!ref']);
+    for(let c=hdrRange.s.c;c<=hdrRange.e.c;c++){
+      const addr=XLSX.utils.encode_cell({r:0,c});
+      if(ws1[addr]){
+        ws1[addr].s={
+          font:{bold:true,color:{rgb:'FFFFFF'}},
+          fill:{patternType:'solid',fgColor:{rgb:'1F3864'}},
+          alignment:{horizontal:'center',vertical:'center'},
+          border:{bottom:{style:'thin'}}
+        };
+      }
+    }
+    XLSX.utils.book_append_sheet(wb,ws1,'Contagem Consolidada');
 
-    XLSX.writeFile(wb,'Contagem_Consolidada_'+new Date().toISOString().slice(0,10)+'.xlsx');
-    showToast('✅ Exportado com 2 abas!');
-  }catch(err){showToast('❌ Erro ao exportar.');console.error(err);}
+    const ws2=XLSX.utils.aoa_to_sheet(detData);
+    ws2['!cols']=[{wch:10},{wch:44},{wch:8},{wch:18},{wch:20},{wch:12},{wch:20},{wch:20}];
+    XLSX.utils.book_append_sheet(wb,ws2,'Detalhado por Setor');
+
+    const fname='Contagem_Consolidada_Allfood_'+new Date().toISOString().slice(0,10)+'.xlsx';
+    XLSX.writeFile(wb,fname);
+    showToast('✅ Exportado no formato Allfood!');
+  }catch(err){showToast('❌ Erro: '+err.message);console.error(err);}
 }
 
 function doXlsx(rows,fname){
