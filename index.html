@@ -4407,49 +4407,54 @@ async function exportConsolidado(){
   try{
     const snap=await db.ref('/inventario').get();
     if(!snap.exists()){showToast('Nenhuma contagem encontrada.');return;}
-
     const entries=Object.values(snap.val());
     const now=new Date();
     const dtStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR');
-
-    // ── Somar quantidades por produto ────────────────────────────
     const totMap={};
     entries.forEach(e=>{
       const it=e.itens||{};
       Object.keys(it).forEach(cod=>{
         const q=parseFloat(it[cod])||0;
         if(q<=0) return;
-        if(!totMap[cod]){totMap[cod]={total:0,detalhes:[]};}
+        if(!totMap[cod]) totMap[cod]={total:0};
         totMap[cod].total+=q;
-        totMap[cod].detalhes.push(e.setor+': '+q);
       });
     });
-
-    // ── Aba 1: Formato padrão Allfood (soma por produto) ─────────
-    // Apenas cabeçalho de colunas
     const wsData=[
+      ['Relatório:','Lista para contagem','','','',''],
+      ['Emissão:',dtStr,'','','',''],
+      ['Empresa:','CALI CRAVINGS BAR E GRILL','','','',''],
+      ['','','','','',''],
+      ['','Filial: CALI CRAVINGS BAR E GRILL','','','',''],
+      ['Classe:','TODAS','','','',''],
+      ['Sub-Classe:','TODAS','','','',''],
+      ['','','','','',''],
+      ['','','','','',''],
       ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE']
     ];
-
-    // Dados agrupados por CLASSE (ordem do template Allfood)
+    let totalItens=0;
     PRODUCTS.forEach(p=>{
-      if(totMap[p.cod] && totMap[p.cod].total>0){
+      if(totMap[p.cod]&&totMap[p.cod].total>0){
         const meta=ALLFOOD_META[p.cod]||['',''];
-        wsData.push([
-          parseInt(p.cod)||p.cod,
-          p.desc,
-          p.unit,
-          meta[0],
-          meta[1],
-          totMap[p.cod].total
-        ]);
+        wsData.push([parseInt(p.cod)||p.cod,p.desc,p.unit,meta[0],meta[1],totMap[p.cod].total]);
+        totalItens++;
       }
     });
-
-    // ── Aba 2: Detalhado por setor ────────────────────────────────
-    const detData=[
-      ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE','SETOR','COLABORADOR']
-    ];
+    wsData.push(['','','','','','']);
+    wsData.push(['Total de itens: ',totalItens,'','','','']);
+    const wb=XLSX.utils.book_new();
+    const ws1=XLSX.utils.aoa_to_sheet(wsData);
+    ws1['!cols']=[{wch:16},{wch:48},{wch:8},{wch:20},{wch:22},{wch:12}];
+    const blueStyle={font:{bold:true,sz:11,name:'Calibri',color:{rgb:'FF020000'}},fill:{patternType:'solid',fgColor:{rgb:'99CCFF'}},border:{top:{style:'thin'},bottom:{style:'thin'}}};
+    const dataStyle={font:{sz:11,name:'Calibri'}};
+    const range=XLSX.utils.decode_range(ws1['!ref']);
+    for(let c=range.s.c;c<=range.e.c;c++){
+      const hAddr=XLSX.utils.encode_cell({r:9,c});
+      if(ws1[hAddr]) ws1[hAddr].s=blueStyle;
+      for(let r=10;r<=range.e.r;r++){const dAddr=XLSX.utils.encode_cell({r,c});if(ws1[dAddr])ws1[dAddr].s=dataStyle;}
+    }
+    XLSX.utils.book_append_sheet(wb,ws1,'Allfood');
+    const detData=[['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE','SETOR','COLABORADOR']];
     entries.forEach(e=>{
       const it=e.itens||{};
       PRODUCTS.forEach(p=>{
@@ -4460,33 +4465,11 @@ async function exportConsolidado(){
         }
       });
     });
-
-    // ── Montar workbook ──────────────────────────────────────────
-    const wb=XLSX.utils.book_new();
-
-    const ws1=XLSX.utils.aoa_to_sheet(wsData);
-    ws1['!cols']=[{wch:14},{wch:48},{wch:8},{wch:20},{wch:22},{wch:12}];
-    // Style header row (row index 9 = row 10 in Excel)
-    const hdrRange=XLSX.utils.decode_range(ws1['!ref']);
-    for(let c=hdrRange.s.c;c<=hdrRange.e.c;c++){
-      const addr=XLSX.utils.encode_cell({r:0,c});
-      if(ws1[addr]){
-        ws1[addr].s={
-          font:{bold:true,color:{rgb:'FFFFFF'}},
-          fill:{patternType:'solid',fgColor:{rgb:'1F3864'}},
-          alignment:{horizontal:'center',vertical:'center'},
-          border:{bottom:{style:'thin'}}
-        };
-      }
-    }
-    XLSX.utils.book_append_sheet(wb,ws1,'Contagem Consolidada');
-
     const ws2=XLSX.utils.aoa_to_sheet(detData);
     ws2['!cols']=[{wch:10},{wch:44},{wch:8},{wch:18},{wch:20},{wch:12},{wch:20},{wch:20}];
+    for(let c=0;c<8;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws2[a])ws2[a].s=blueStyle;}
     XLSX.utils.book_append_sheet(wb,ws2,'Detalhado por Setor');
-
-    const fname='Contagem_Consolidada_Allfood_'+new Date().toISOString().slice(0,10)+'.xlsx';
-    XLSX.writeFile(wb,fname);
+    XLSX.writeFile(wb,'Contagem_Consolidada_Allfood_'+new Date().toISOString().slice(0,10)+'.xlsx');
     showToast('✅ Exportado no formato Allfood!');
   }catch(err){showToast('❌ Erro: '+err.message);console.error(err);}
 }
