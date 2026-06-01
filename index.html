@@ -4175,33 +4175,61 @@ async function startInventory(forceNew){
 }
 
 /* ── BUILD LIST ──────────────────────────────── */
+// Global category map built once
+let _cats={};
+let _catKeys=[];
+
 function buildList(){
   const con=document.getElementById('prod-list');
-  con.innerHTML='';
-  const cats={};
-  PRODUCTS.forEach(p=>{if(!cats[p.cat])cats[p.cat]=[];cats[p.cat].push(p);});
-  Object.keys(cats).sort().forEach((cat,i)=>{
-    const items=cats[cat];
-    const fil=items.filter(p=>saved[p.cod]!=null).length;
-    const sec=document.createElement('div');
-    sec.className='cat-sec'+(i===0?' open':'');
-    sec.id='cat'+i;
-    sec.innerHTML=`
-      <div class="cat-hdr" onclick="togCat(${i})">
-        <div class="cat-left">
-          <span class="cat-lbl">${catEmoji(cat)} ${cat}</span>
-          <span class="cat-badge${fil?' lit':''}" id="bdg${i}">${fil}/${items.length}</span>
+  con.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">⏳ Carregando produtos...</div>';
+  
+  // Build category map
+  _cats={};
+  PRODUCTS.forEach(p=>{if(!_cats[p.cat])_cats[p.cat]=[];_cats[p.cat].push(p);});
+  _catKeys=Object.keys(_cats).sort();
+  
+  // Render async to avoid freezing UI
+  setTimeout(()=>{
+    con.innerHTML='';
+    _catKeys.forEach((cat,i)=>{
+      const items=_cats[cat];
+      const fil=items.filter(p=>saved[p.cod]!=null).length;
+      const isOpen=fil>0||(i===0);
+      const sec=document.createElement('div');
+      sec.className='cat-sec'+(isOpen?' open':'');
+      sec.id='cat'+i;
+      sec.dataset.catIndex=i;
+      sec.dataset.rendered=isOpen?'true':'false';
+      
+      const bodyHtml = isOpen ? items.map(p=>pRow(p)).join('') : '';
+      
+      sec.innerHTML=`
+        <div class="cat-hdr" onclick="togCat(${i})">
+          <div class="cat-left">
+            <span class="cat-lbl">${catEmoji(cat)} ${cat}</span>
+            <span class="cat-badge${fil?' lit':''}" id="bdg${i}">${fil}/${items.length}</span>
+          </div>
+          <svg class="cat-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        <svg class="cat-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <polyline points="6 9 12 15 18 9"/></svg>
-      </div>
-      <div class="cat-body" id="body${i}">
-        ${items.map(p=>pRow(p)).join('')}
-      </div>`;
-    con.appendChild(sec);
-    if(fil>0) sec.classList.add('open');
-  });
-  updProg();
+        <div class="cat-body" id="body${i}">${bodyHtml}</div>`;
+      con.appendChild(sec);
+    });
+    updProg();
+  }, 50);
+}
+
+function togCat(i){
+  const sec=document.getElementById('cat'+i);
+  const body=document.getElementById('body'+i);
+  
+  // Lazy render: only build rows when first opened
+  if(!sec.classList.contains('open') && sec.dataset.rendered==='false'){
+    const cat=_catKeys[i];
+    body.innerHTML=_cats[cat].map(p=>pRow(p)).join('');
+    sec.dataset.rendered='true';
+  }
+  sec.classList.toggle('open');
 }
 
 function pRow(p){
@@ -4233,7 +4261,7 @@ function onQty(cod,el){
   updProg();updBadges();
 }
 
-function togCat(i){document.getElementById('cat'+i).classList.toggle('open');}
+// togCat defined in buildList
 
 function updProg(){
   const fil=Object.keys(saved).length;
@@ -4267,6 +4295,21 @@ function catEmoji(c){
 /* ── SEARCH ──────────────────────────────────── */
 function filterProds(q){
   q=q.toLowerCase().trim();
+  if(!q){
+    // restore normal view
+    document.querySelectorAll('.cat-sec').forEach(s=>s.style.display='');
+    document.querySelectorAll('.p-row').forEach(r=>r.style.display='');
+    return;
+  }
+  // When searching: render ALL categories lazily first
+  _catKeys.forEach((cat,i)=>{
+    const sec=document.getElementById('cat'+i);
+    const body=document.getElementById('body'+i);
+    if(sec && sec.dataset.rendered==='false'){
+      body.innerHTML=_cats[cat].map(p=>pRow(p)).join('');
+      sec.dataset.rendered='true';
+    }
+  });
   document.querySelectorAll('.p-row').forEach(r=>{
     const desc=r.querySelector('.p-desc').textContent.toLowerCase();
     const cod=r.querySelector('.p-cod').textContent.toLowerCase();
@@ -4275,7 +4318,7 @@ function filterProds(q){
   document.querySelectorAll('.cat-sec').forEach(s=>{
     const vis=[...s.querySelectorAll('.p-row')].some(r=>r.style.display!=='none');
     s.style.display=vis?'':'none';
-    if(q&&vis) s.classList.add('open');
+    if(vis) s.classList.add('open');
   });
 }
 
