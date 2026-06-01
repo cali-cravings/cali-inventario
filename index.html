@@ -4151,6 +4151,7 @@ function fbKey(){
 
 /* ── START ───────────────────────────────────── */
 async function startInventory(forceNew){
+  try{
   // Validate
   nome=document.getElementById('inp-nome').value.trim();
   data=document.getElementById('inp-data').value;
@@ -4186,8 +4187,15 @@ async function startInventory(forceNew){
   }
 
   // Navigate and build
-  showScreen('inventory');
-  buildList();
+  try{
+    showScreen('inventory');
+    buildList();
+  }catch(err){
+    showToast('ERRO: '+err.message);
+    console.error(err);
+    alert('Erro ao iniciar: '+err.message);
+    return;
+  }
 
   if(submitted){
     document.getElementById('btn-enviar').disabled=true;
@@ -4200,6 +4208,11 @@ async function startInventory(forceNew){
   // Reset button for next time
   btn.textContent='Iniciar Contagem →';
   btn.disabled=false;
+  }catch(err){
+    alert('Erro JS: '+err.message+'\n\nStack: '+err.stack);
+    document.getElementById('btn-start').textContent='Iniciar Contagem →';
+    document.getElementById('btn-start').disabled=false;
+  }
 }
 
 /* ── BUILD LIST ──────────────────────────────── */
