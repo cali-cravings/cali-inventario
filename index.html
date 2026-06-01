@@ -279,20 +279,20 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
       <div class="card-title">🏢 Selecionar Setor</div>
       <div class="setor-grid" id="setor-grid">
         <div class="setor-grp">MASHA</div>
-        <button class="setor-btn" data-s="MASHA COZINHA">MASHA<br>COZINHA</button>
-        <button class="setor-btn" data-s="MASHA BAR">MASHA<br>BAR</button>
-        <button class="setor-btn" data-s="MASHA LIMPEZA">MASHA<br>LIMPEZA</button>
+        <button class="setor-btn" onclick="selSetor(this,'MASHA COZINHA')">MASHA<br>COZINHA</button>
+        <button class="setor-btn" onclick="selSetor(this,'MASHA BAR')">MASHA<br>BAR</button>
+        <button class="setor-btn" onclick="selSetor(this,'MASHA LIMPEZA')">MASHA<br>LIMPEZA</button>
         <div class="setor-grp">PIER</div>
-        <button class="setor-btn" data-s="PIER COZINHA">PIER<br>COZINHA</button>
-        <button class="setor-btn" data-s="PIER BAR">PIER<br>BAR</button>
-        <button class="setor-btn" data-s="PIER LIMPEZA">PIER<br>LIMPEZA</button>
+        <button class="setor-btn" onclick="selSetor(this,'PIER COZINHA')">PIER<br>COZINHA</button>
+        <button class="setor-btn" onclick="selSetor(this,'PIER BAR')">PIER<br>BAR</button>
+        <button class="setor-btn" onclick="selSetor(this,'PIER LIMPEZA')">PIER<br>LIMPEZA</button>
         <div class="setor-grp">LINHAS DE PRODUÇÃO</div>
-        <button class="setor-btn" data-s="LINHA 1">LINHA 1</button>
-        <button class="setor-btn" data-s="LINHA 2">LINHA 2</button>
-        <button class="setor-btn" data-s="LINHA 3">LINHA 3</button>
-        <button class="setor-btn" data-s="LINHA 4">LINHA 4</button>
+        <button class="setor-btn" onclick="selSetor(this,'LINHA 1')">LINHA 1</button>
+        <button class="setor-btn" onclick="selSetor(this,'LINHA 2')">LINHA 2</button>
+        <button class="setor-btn" onclick="selSetor(this,'LINHA 3')">LINHA 3</button>
+        <button class="setor-btn" onclick="selSetor(this,'LINHA 4')">LINHA 4</button>
         <div class="setor-grp">ESTOQUE</div>
-        <button class="setor-btn span2" data-s="ESTOQUE BAR">ESTOQUE BAR</button>
+        <button class="setor-btn span2" onclick="selSetor(this,'ESTOQUE BAR')">ESTOQUE BAR</button>
       </div>
     </div>
 
@@ -4088,16 +4088,17 @@ const ALLFOOD_META={
 let nome='',data='',setor='',saved={},submitted=false,saving=false;
 
 /* ── INIT ───────────────────────────────────── */
+function selSetor(btn, s){
+  document.querySelectorAll('.setor-btn').forEach(x=>x.classList.remove('sel'));
+  btn.classList.add('sel');
+  setor = s;
+  valLogin();
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
   const d=new Date();
   document.getElementById('inp-data').value=
     d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  document.querySelectorAll('.setor-btn').forEach(b=>{
-    b.addEventListener('click',()=>{
-      document.querySelectorAll('.setor-btn').forEach(x=>x.classList.remove('sel'));
-      b.classList.add('sel'); setor=b.dataset.s; valLogin();
-    });
-  });
   document.getElementById('inp-nome').addEventListener('input',valLogin);
   document.getElementById('inp-data').addEventListener('change',valLogin);
 });
@@ -4123,6 +4124,7 @@ function novaContagem(){
   nome='';data='';setor='';saved={};submitted=false;
   // reset UI
   document.querySelectorAll('.setor-btn').forEach(b=>b.classList.remove('sel'));
+  setor='';
   document.getElementById('inp-nome').value='';
   const d=new Date();
   document.getElementById('inp-data').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -4151,51 +4153,35 @@ function fbKey(){
 
 /* ── START ───────────────────────────────────── */
 async function startInventory(forceNew){
-  try{
-  // Validate
   nome=document.getElementById('inp-nome').value.trim();
   data=document.getElementById('inp-data').value;
   if(!nome||nome.length<2){showToast('⚠️ Digite seu nome.');return;}
   if(!data){showToast('⚠️ Selecione a data.');return;}
   if(!setor){showToast('⚠️ Selecione um setor.');return;}
 
-  // Show loading on button
   const btn=document.getElementById('btn-start');
   btn.disabled=true;
-  btn.textContent='⏳ Carregando...';
+  btn.textContent='⏳ Aguarde...';
 
-  // Update header
   document.getElementById('hdr-setor').textContent=setor+' — '+nome;
   document.getElementById('hdr-date').textContent=ptDate(data);
   document.getElementById('hdr-session').classList.add('on');
   document.getElementById('btn-admin').classList.remove('gone');
   document.getElementById('btn-nova').classList.remove('gone');
 
-  // Load draft with timeout
   saved={};submitted=false;
   try{
     if(!forceNew){
       const snap=await Promise.race([
         db.ref('/inventario/'+fbKey()).get(),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),5000))
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000))
       ]);
       if(snap.exists()){const v=snap.val();saved=v.itens||{};submitted=v.status==='enviado';}
     }
-  }catch(e){
-    console.warn('Draft load skipped:',e.message);
-    saved={};submitted=false;
-  }
+  }catch(e){console.warn('Draft:',e.message);}
 
-  // Navigate and build
-  try{
-    showScreen('inventory');
-    buildList();
-  }catch(err){
-    showToast('ERRO: '+err.message);
-    console.error(err);
-    alert('Erro ao iniciar: '+err.message);
-    return;
-  }
+  showScreen('inventory');
+  buildList();
 
   if(submitted){
     document.getElementById('btn-enviar').disabled=true;
@@ -4205,14 +4191,8 @@ async function startInventory(forceNew){
     showToast('Esta contagem já foi enviada.');
   }
 
-  // Reset button for next time
   btn.textContent='Iniciar Contagem →';
   btn.disabled=false;
-  }catch(err){
-    alert('Erro JS: '+err.message+'\n\nStack: '+err.stack);
-    document.getElementById('btn-start').textContent='Iniciar Contagem →';
-    document.getElementById('btn-start').disabled=false;
-  }
 }
 
 /* ── BUILD LIST ──────────────────────────────── */
