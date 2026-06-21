@@ -185,8 +185,9 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
 .filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .filters input,.filters select{flex:1;min-width:130px;padding:8px 11px;font-size:13px;}
 .cnt-card{background:var(--branco);border-radius:var(--r);padding:13px 15px;margin-bottom:8px;
-  display:flex;align-items:center;gap:11px;box-shadow:0 1px 6px rgba(44,62,53,.08);}
-.cnt-info{flex:1;min-width:0;}
+  display:flex;align-items:center;gap:9px;flex-wrap:wrap;box-shadow:0 1px 6px rgba(44,62,53,.08);}
+.cnt-info{flex:1;min-width:140px;}
+.cnt-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-left:auto;}
 .cnt-info strong{font-size:13.5px;display:block;margin-bottom:2px;}
 .cnt-info span{font-size:11.5px;color:var(--muted);display:block;}
 .sta{padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:700;
@@ -201,6 +202,10 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
   border:1.5px solid #e05252;background:var(--branco);color:#e05252;
   transition:all .13s;flex-shrink:0;}
 .btn-del:hover{background:#e05252;color:var(--branco);}
+.btn-resume{border-color:#d4a017;color:#d4a017;}
+.btn-resume:hover{background:#d4a017;color:var(--branco);}
+.btn-view{border-color:#2e7d4f;color:#2e7d4f;}
+.btn-view:hover{background:#2e7d4f;color:var(--branco);}
 
 /* ─── MODAL ── */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:150;
@@ -3482,10 +3487,16 @@ async function loadAdmin(){
     if(fs) ent=ent.filter(e=>e.setor===fs);
     ent.sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
     if(!ent.length){con.innerHTML='<p style="color:var(--muted);text-align:center;padding:32px">🔍 Nenhum resultado.</p>';return;}
-    // store keys in global map to avoid escaping issues
+    // store keys AND full entries in global map to avoid escaping issues
     window._adminKeys = {};
+    window._adminEntries = {};
     con.innerHTML=ent.map((e,i)=>{
       window._adminKeys[i]=e._k;
+      window._adminEntries[i]=e;
+      const isEnviado = e.status==='enviado';
+      const actionBtn = isEnviado
+        ? `<button class="btn-sm btn-view" onclick="openEntry(${i})" title="Visualizar">👁️ Visualizar</button>`
+        : `<button class="btn-sm btn-resume" onclick="openEntry(${i})" title="Retomar contagem">↩️ Retomar</button>`;
       return `
       <div class="cnt-card">
         <div class="cnt-info">
@@ -3493,13 +3504,43 @@ async function loadAdmin(){
           <span>${e.colaborador} · ${ptDate(e.data)}</span>
           <span>${Object.keys(e.itens||{}).length} itens contados</span>
         </div>
-        <span class="sta ${e.status==='enviado'?'env':'and'}">
-          ${e.status==='enviado'?'✅ Enviado':'⏳ Rascunho'}</span>
-        <button class="btn-sm" onclick="exportEntry(window._adminKeys[${i}])">Excel</button>
-        <button class="btn-del" onclick="confirmDelete(window._adminKeys[${i}])" title="Excluir">🗑️</button>
+        <div class="cnt-actions">
+          <span class="sta ${isEnviado?'env':'and'}">
+            ${isEnviado?'✅ Enviado':'⏳ Rascunho'}</span>
+          ${actionBtn}
+          <button class="btn-sm" onclick="exportEntry(window._adminKeys[${i}])">Excel</button>
+          <button class="btn-del" onclick="confirmDelete(window._adminKeys[${i}])" title="Excluir">🗑️</button>
+        </div>
       </div>`;
     }).join('');
   }catch{con.innerHTML='<p style="color:var(--muted);text-align:center;padding:32px">❌ Erro ao carregar.</p>';}
+}
+
+async function openEntry(idx){
+  const e = window._adminEntries[idx];
+  if(!e){showToast('❌ Contagem não encontrada.');return;}
+
+  nome  = e.colaborador;
+  data  = e.data;
+  setor = e.setor;
+  saved = e.itens ? {...e.itens} : {};
+  submitted = e.status === 'enviado';
+
+  document.getElementById('hdr-setor').textContent = setor+' — '+nome;
+  document.getElementById('hdr-date').textContent = ptDate(data);
+  document.getElementById('hdr-session').classList.add('on');
+  document.getElementById('btn-admin').classList.remove('gone');
+  document.getElementById('btn-nova').classList.remove('gone');
+
+  showScreen('inventory');
+  buildList();
+
+  document.getElementById('sub-banner').classList.toggle('gone', !submitted);
+  document.getElementById('btn-enviar').disabled = submitted;
+  document.getElementById('btn-enviar').textContent = submitted ? '✅ Já Enviado' : '✅ Enviar Contagem';
+  document.getElementById('btn-gravar').disabled = submitted;
+
+  showToast(submitted ? '👁️ Visualizando contagem enviada (somente leitura).' : '↩️ Retomando rascunho...');
 }
 
 async function exportEntry(key){
