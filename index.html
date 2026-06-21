@@ -156,6 +156,14 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
 .qty-inp.filled{border-color:#4aaf7d;background:#edf8f2;color:#1a5c36;font-weight:700;}
 .qty-inp::-webkit-inner-spin-button,.qty-inp::-webkit-outer-spin-button{-webkit-appearance:none;}
 .qty-inp{-moz-appearance:textfield;}
+.prep-row{padding:10px 14px;align-items:flex-start;}
+.prep-row .p-info{padding-top:4px;}
+.qty-dual{display:flex;gap:8px;flex-shrink:0;}
+.qty-col{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.qty-lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.porc-inp{border-color:#c9a86a;}
+.porc-inp.filled{border-color:#b8860b;background:#fdf6e8;color:#8a6200;}
+.porc-inp:focus{border-color:#b8860b;}
 
 /* ─── ACTION BAR ── */
 .action-bar{position:fixed;bottom:0;left:0;right:0;background:var(--branco);
@@ -3076,7 +3084,7 @@ const ALLFOOD_META={
 };
 
 /* ── STATE ──────────────────────────────────── */
-let nome='',data='',setor='',saved={},submitted=false,saving=false;
+let nome='',data='',setor='',saved={},savedPorc={},submitted=false,saving=false;
 
 /* ── INIT ───────────────────────────────────── */
 function selSetor(btn, s){
@@ -3112,7 +3120,7 @@ function showScreen(s){
 function novaContagem(){
   if(!confirm('Iniciar nova contagem? O progresso atual não será perdido — ficará salvo no Firebase.')) return;
   // reset state
-  nome='';data='';setor='';saved={};submitted=false;
+  nome='';data='';setor='';saved={};savedPorc={};submitted=false;
   // reset UI
   document.querySelectorAll('.setor-btn').forEach(b=>b.classList.remove('sel'));
   setor='';
@@ -3160,14 +3168,14 @@ async function startInventory(forceNew){
   document.getElementById('btn-admin').classList.remove('gone');
   document.getElementById('btn-nova').classList.remove('gone');
 
-  saved={};submitted=false;
+  saved={};savedPorc={};submitted=false;
   try{
     if(!forceNew){
       const snap=await Promise.race([
         db.ref('/inventario/'+fbKey()).get(),
         new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000))
       ]);
-      if(snap.exists()){const v=snap.val();saved=v.itens||{};submitted=v.status==='enviado';}
+      if(snap.exists()){const v=snap.val();saved=v.itens||{};savedPorc=v.porcoes||{};submitted=v.status==='enviado';}
     }
   }catch(e){console.warn('Draft:',e.message);}
 
@@ -3247,6 +3255,34 @@ function togCat(i){
 function pRow(p){
   const v=saved[p.cod]!=null?saved[p.cod]:'';
   const ro=submitted?'readonly':'';
+  const isPrep = p.cat==='PREPARADOS DE COZINHA';
+  if(isPrep){
+    const vp=savedPorc[p.cod]!=null?savedPorc[p.cod]:'';
+    return `
+    <div class="p-row prep-row${(v!==''||vp!=='')?' lit':''}" id="row${p.cod}">
+      <div class="p-info">
+        <div class="p-desc">${p.desc}</div>
+        <div class="p-cod">Cód. ${p.cod}</div>
+      </div>
+      <div class="p-unit">${p.unit}</div>
+      <div class="qty-dual">
+        <div class="qty-col">
+          <span class="qty-lbl">Qtd</span>
+          <input type="number" class="qty-inp${v!==''?' filled':''}"
+            id="q${p.cod}" value="${v}" placeholder="0"
+            min="0" step="0.001" ${ro}
+            oninput="onQty('${p.cod}',this)">
+        </div>
+        <div class="qty-col">
+          <span class="qty-lbl">Porções</span>
+          <input type="number" class="qty-inp porc-inp${vp!==''?' filled':''}"
+            id="p${p.cod}" value="${vp}" placeholder="0"
+            min="0" step="1" ${ro}
+            oninput="onPorc('${p.cod}',this)">
+        </div>
+      </div>
+    </div>`;
+  }
   return `
     <div class="p-row${v!==''?' lit':''}" id="row${p.cod}">
       <div class="p-info">
@@ -3265,12 +3301,23 @@ function onQty(cod,el){
   const v=el.value;
   if(v!==''&&!isNaN(parseFloat(v))){
     saved[cod]=parseFloat(v);el.classList.add('filled');
-    document.getElementById('row'+cod).classList.add('lit');
   }else{
     delete saved[cod];el.classList.remove('filled');
-    document.getElementById('row'+cod).classList.remove('lit');
   }
+  const hasQty=saved[cod]!=null, hasPorc=savedPorc[cod]!=null;
+  document.getElementById('row'+cod).classList.toggle('lit', hasQty||hasPorc);
   updProg();updBadges();
+}
+
+function onPorc(cod,el){
+  const v=el.value;
+  if(v!==''&&!isNaN(parseFloat(v))){
+    savedPorc[cod]=parseFloat(v);el.classList.add('filled');
+  }else{
+    delete savedPorc[cod];el.classList.remove('filled');
+  }
+  const hasQty=saved[cod]!=null, hasPorc=savedPorc[cod]!=null;
+  document.getElementById('row'+cod).classList.toggle('lit', hasQty||hasPorc);
 }
 
 // togCat defined in buildList
@@ -3343,7 +3390,7 @@ async function saveProgress(){
   try{
     await db.ref('/inventario/'+fbKey()).set({
       colaborador:nome,data,setor,status:'andamento',
-      timestamp:Date.now(),itens:saved
+      timestamp:Date.now(),itens:saved,porcoes:savedPorc
     });
     showToast('✅ Rascunho salvo!');
   }catch{showToast('❌ Falha na conexão.');}
@@ -3359,7 +3406,7 @@ async function submitInventory(){
   try{
     await db.ref('/inventario/'+fbKey()).set({
       colaborador:nome,data,setor,status:'enviado',
-      timestamp:Date.now(),tsEnvio:Date.now(),itens:saved
+      timestamp:Date.now(),tsEnvio:Date.now(),itens:saved,porcoes:savedPorc
     });
     submitted=true;
     document.getElementById('btn-enviar').disabled=true;
@@ -3460,6 +3507,36 @@ async function exportConsolidado(){
     ws2['!cols']=[{wch:10},{wch:44},{wch:8},{wch:18},{wch:20},{wch:12},{wch:20},{wch:20}];
     for(let c=0;c<8;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws2[a])ws2[a].s=blueStyle;}
     XLSX.utils.book_append_sheet(wb,ws2,'Detalhado por Setor');
+
+    // ── Aba 3: Porções (apenas itens de PREPARADOS DE COZINHA com porções) ──
+    const porcMap={};
+    entries.forEach(e=>{
+      const pc=e.porcoes||{};
+      Object.keys(pc).forEach(cod=>{
+        const v=parseFloat(pc[cod])||0;
+        if(v<=0) return;
+        if(!porcMap[cod]) porcMap[cod]={total:0,setores:[]};
+        porcMap[cod].total+=v;
+        porcMap[cod].setores.push(e.setor+': '+v);
+      });
+    });
+    const porcData=[['COD','DESCRIÇÃO','UN','TOTAL PORÇÕES','DETALHES POR SETOR']];
+    let totalPorcItens=0;
+    PRODUCTS.forEach(p=>{
+      if(p.cat==='PREPARADOS DE COZINHA' && porcMap[p.cod] && porcMap[p.cod].total>0){
+        porcData.push([parseInt(p.cod)||p.cod,p.desc,p.unit,porcMap[p.cod].total,porcMap[p.cod].setores.join(' | ')]);
+        totalPorcItens++;
+      }
+    });
+    if(totalPorcItens>0){
+      porcData.push(['','','','','']);
+      porcData.push(['Total de itens: ',totalPorcItens,'','','']);
+      const ws3=XLSX.utils.aoa_to_sheet(porcData);
+      ws3['!cols']=[{wch:10},{wch:44},{wch:8},{wch:16},{wch:55}];
+      for(let c=0;c<5;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws3[a])ws3[a].s=blueStyle;}
+      XLSX.utils.book_append_sheet(wb,ws3,'Porções');
+    }
+
     XLSX.writeFile(wb,'Contagem_Consolidada_Allfood_'+new Date().toISOString().slice(0,10)+'.xlsx');
     showToast('✅ Exportado no formato Allfood!');
   }catch(err){showToast('❌ Erro: '+err.message);console.error(err);}
@@ -3524,6 +3601,7 @@ async function openEntry(idx){
   data  = e.data;
   setor = e.setor;
   saved = e.itens ? {...e.itens} : {};
+  savedPorc = e.porcoes ? {...e.porcoes} : {};
   submitted = e.status === 'enviado';
 
   document.getElementById('hdr-setor').textContent = setor+' — '+nome;
