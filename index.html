@@ -3481,7 +3481,21 @@ async function exportConsolidado(){
   try{
     const snap=await db.ref('/inventario').get();
     if(!snap.exists()){showToast('Nenhuma contagem encontrada.');return;}
-    const entries=Object.values(snap.val());
+
+    // ── Filtro de setor ──────────────────────────────────────────
+    const filterSetor=document.getElementById('f-setor').value;
+    const filterData=document.getElementById('f-data').value;
+    let entries=Object.values(snap.val());
+    if(filterSetor) entries=entries.filter(e=>e.setor===filterSetor);
+    if(filterData)  entries=entries.filter(e=>e.data===filterData);
+
+    if(entries.length===0){
+      showToast('Nenhuma contagem encontrada com esse filtro.');return;
+    }
+
+    const setorLabel = filterSetor || 'TODOS OS SETORES';
+    const dataLabel  = filterData  ? new Date(filterData+'T12:00:00').toLocaleDateString('pt-BR') : 'TODAS AS DATAS';
+
     const now=new Date();
     const dtStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR');
     const totMap={};
@@ -3499,7 +3513,7 @@ async function exportConsolidado(){
       ['Emissão:',dtStr,'','','',''],
       ['Empresa:','CALI CRAVINGS BAR E GRILL','','','',''],
       ['','','','','',''],
-      ['','Filial: CALI CRAVINGS BAR E GRILL','','','',''],
+      ['Setor:',setorLabel,'Data:',dataLabel,'',''],
       ['Classe:','TODAS','','','',''],
       ['Sub-Classe:','TODAS','','','',''],
       ['','','','','',''],
@@ -3573,7 +3587,9 @@ async function exportConsolidado(){
       XLSX.utils.book_append_sheet(wb,ws3,'Porções');
     }
 
-    XLSX.writeFile(wb,'Contagem_Consolidada_Allfood_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    const setorSuffix=(document.getElementById('f-setor').value||'Todos').replace(/[\s&]/g,'_');
+    const dataSuffix=(document.getElementById('f-data').value||new Date().toISOString().slice(0,10));
+    XLSX.writeFile(wb,'Contagem_'+setorSuffix+'_'+dataSuffix+'.xlsx');
     showToast('✅ Exportado no formato Allfood!');
   }catch(err){showToast('❌ Erro: '+err.message);console.error(err);}
 }
