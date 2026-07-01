@@ -3677,10 +3677,58 @@ async function exportEntry(key){
   const snap=await db.ref('/inventario/'+key).get();
   if(!snap.exists())return;
   const e=snap.val();
-  const rows=[['CÓD. INT.','DESCRIÇÃO INTERNA','UN.VENDA','QUANTIDADE','SETOR','DATA','COLABORADOR']];
   const it=e.itens||{};
-  PRODUCTS.forEach(p=>{rows.push([p.cod,p.desc,p.unit,it[p.cod]!=null?it[p.cod]:'',e.setor,e.data,e.colaborador]);});
-  doXlsx(rows,'Contagem_'+e.setor.replace(/\s/g,'_')+'_'+e.data);
+  const now=new Date();
+  const dtStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR');
+  const dataFmt=e.data?new Date(e.data+'T12:00:00').toLocaleDateString('pt-BR'):e.data;
+
+  // Cabeçalho padrão Allfood
+  const wsData=[
+    ['Relatório:','Lista para contagem','','','',''],
+    ['Emissão:',dtStr,'','','',''],
+    ['Empresa:','CALI CRAVINGS BAR E GRILL','','','',''],
+    ['','','','','',''],
+    ['Setor:',e.setor,'Data:',dataFmt,'Colaborador:',e.colaborador],
+    ['Classe:','TODAS','','','',''],
+    ['Sub-Classe:','TODAS','','','',''],
+    ['','','','','',''],
+    ['','','','','',''],
+    ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE']
+  ];
+
+  let totalItens=0;
+  PRODUCTS.forEach(p=>{
+    const q=it[p.cod];
+    if(q!=null&&parseFloat(q)>0){
+      const meta=ALLFOOD_META[p.cod]||['',''];
+      wsData.push([parseInt(p.cod)||p.cod,p.desc,p.unit,meta[0],meta[1],parseFloat(q)]);
+      totalItens++;
+    }
+  });
+  wsData.push(['','','','','','']);
+  wsData.push(['Total de itens: ',totalItens,'','','','']);
+
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=[{wch:16},{wch:48},{wch:8},{wch:20},{wch:22},{wch:12}];
+
+  const blueStyle={
+    font:{bold:true,sz:11,name:'Calibri',color:{rgb:'FF020000'}},
+    fill:{patternType:'solid',fgColor:{rgb:'99CCFF'}},
+    border:{top:{style:'thin'},bottom:{style:'thin'}}
+  };
+  const dataStyle={font:{sz:11,name:'Calibri'}};
+  const range=XLSX.utils.decode_range(ws['!ref']);
+  for(let c=range.s.c;c<=range.e.c;c++){
+    const hAddr=XLSX.utils.encode_cell({r:9,c});
+    if(ws[hAddr]) ws[hAddr].s=blueStyle;
+    for(let r=10;r<=range.e.r;r++){
+      const dAddr=XLSX.utils.encode_cell({r,c});
+      if(ws[dAddr]) ws[dAddr].s=dataStyle;
+    }
+  }
+  XLSX.utils.book_append_sheet(wb,ws,'Allfood');
+  XLSX.writeFile(wb,'Contagem_'+e.setor.replace(/[\s&]/g,'_')+'_'+e.data+'.xlsx');
 }
 
 
