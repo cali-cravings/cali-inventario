@@ -3917,76 +3917,74 @@ async function openEntry(idx){
 async function downloadAllfood(idx){
   const key=window._adminKeys[idx];
   if(!key){showToast('Contagem não encontrada.');return;}
-  showToast('⏳ Gerando arquivo...',10000);
-  const snap=await db.ref('/inventario/'+key).get();
-  if(!snap.exists()) return;
-  const e=snap.val();
-  const now=new Date();
-  const dtStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR');
-  const dataFmt=e.data?new Date(e.data+'T12:00:00').toLocaleDateString('pt-BR'):e.data;
+  showToast('⏳ Carregando...',10000);
 
-  const blueStyle={font:{bold:true,sz:11,name:'Calibri',color:{rgb:'FF020000'}},
-    fill:{patternType:'solid',fgColor:{rgb:'99CCFF'}},
-    border:{top:{style:'thin'},bottom:{style:'thin'}}};
-  const dfStyle={font:{sz:11,name:'Calibri'}};
+  try{
+    const snap=await db.ref('/inventario/'+key+'/allfood_upload').get();
 
-  const wsData=[
-    ['Relatório:','Lista para contagem','','','',''],
-    ['Emissão:',dtStr,'','','',''],
-    ['Empresa:','CALI CRAVINGS BAR E GRILL','','','',''],
-    ['','','','','',''],
-    ['Setor:',e.setor,'Data:',dataFmt,'Colaborador:',e.colaborador],
-    ['Classe:','TODAS','','','',''],
-    ['Sub-Classe:','TODAS','','','',''],
-    ['','','','','',''],
-    ['','','','','',''],
-    ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE']
-  ];
+    if(snap.exists()){
+      const up=snap.val();
 
-  let n=0;
+      // Reconstruct exact original file from base64
+      const binary=atob(up.base64);
+      const bytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+      const blob=new Blob([bytes],{type:'application/octet-stream'});
 
-  // Priority: use uploaded Pablo file if available
-  if(e.allfood_upload && e.allfood_upload.rows && e.allfood_upload.rows.length>0){
-    e.allfood_upload.rows.forEach(r=>{
-      if(r.total>0){
-        wsData.push([parseInt(r.cod)||r.cod,r.desc,r.unit,r.classe,r.sub,r.total]);
-        n++;
-      }
-    });
-    wsData.push(['','','','','','']);
-    wsData.push(['Total de itens: ',n,'','Fonte:',e.allfood_upload.arquivo||'upload','']);
-  } else {
-    // Fallback: use counted items from app
-    const it=e.itens||{};
-    PRODUCTS.forEach(p=>{
-      const q=it[p.cod];
-      if(q!=null&&parseFloat(q)>0){
-        const meta=ALLFOOD_META[p.cod]||['',''];
-        wsData.push([parseInt(p.cod)||p.cod,p.desc,p.unit,meta[0],meta[1],parseFloat(q)]);
-        n++;
-      }
-    });
-    wsData.push(['','','','','','']);
-    wsData.push(['Total de itens: ',n,'','','','']);
-  }
+      // Download with original filename
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download=up.filename||'planilha.xlsx';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-  const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.aoa_to_sheet(wsData);
-  ws['!cols']=[{wch:12},{wch:48},{wch:8},{wch:20},{wch:22},{wch:12}];
+      showToast('✅ Download: '+up.filename);
 
-  const range=XLSX.utils.decode_range(ws['!ref']);
-  for(let c=range.s.c;c<=range.e.c;c++){
-    const h=XLSX.utils.encode_cell({r:9,c});
-    if(ws[h]) ws[h].s=blueStyle;
-    for(let r=10;r<=range.e.r;r++){
-      const d=XLSX.utils.encode_cell({r,c});
-      if(ws[d]) ws[d].s=dfStyle;
+    } else {
+      // Fallback: generate from counted items
+      const snap2=await db.ref('/inventario/'+key).get();
+      if(!snap2.exists()){showToast('Nenhum dado encontrado.');return;}
+      const e=snap2.val();
+      const it=e.itens||{};
+      const now=new Date();
+      const dtStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR');
+      const dataFmt=e.data?new Date(e.data+'T12:00:00').toLocaleDateString('pt-BR'):e.data;
+      const blueStyle={font:{bold:true,sz:11,name:'Calibri',color:{rgb:'FF020000'}},fill:{patternType:'solid',fgColor:{rgb:'99CCFF'}},border:{top:{style:'thin'},bottom:{style:'thin'}}};
+      const dfStyle={font:{sz:11,name:'Calibri'}};
+      const wsData=[
+        ['Relatório:','Lista para contagem','','','',''],
+        ['Emissão:',dtStr,'','','',''],
+        ['Empresa:','CALI CRAVINGS BAR E GRILL','','','',''],
+        ['','','','','',''],
+        ['Setor:',e.setor,'Data:',dataFmt,'Colaborador:',e.colaborador],
+        ['Classe:','TODAS','','','',''],['Sub-Classe:','TODAS','','','',''],
+        ['','','','','',''],['','','','','',''],
+        ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE']
+      ];
+      let n=0;
+      PRODUCTS.forEach(p=>{
+        const q=it[p.cod];
+        if(q!=null&&parseFloat(q)>0){
+          const m=ALLFOOD_META[p.cod]||['',''];
+          wsData.push([parseInt(p.cod)||p.cod,p.desc,p.unit,m[0],m[1],parseFloat(q)]);n++;
+        }
+      });
+      wsData.push(['','','','','','']);
+      wsData.push(['Total de itens: ',n,'','','','']);
+      const wb=XLSX.utils.book_new();
+      const ws=XLSX.utils.aoa_to_sheet(wsData);
+      ws['!cols']=[{wch:12},{wch:48},{wch:8},{wch:20},{wch:22},{wch:12}];
+      const rng=XLSX.utils.decode_range(ws['!ref']);
+      for(let c=rng.s.c;c<=rng.e.c;c++){const h=XLSX.utils.encode_cell({r:9,c});if(ws[h])ws[h].s=blueStyle;for(let r=10;r<=rng.e.r;r++){const d=XLSX.utils.encode_cell({r,c});if(ws[d])ws[d].s=dfStyle;}}
+      XLSX.utils.book_append_sheet(wb,ws,'Allfood');
+      XLSX.writeFile(wb,'Allfood_'+e.setor.replace(/[\s&]/g,'_')+'_'+e.data+'.xlsx');
+      showToast('✅ Download gerado a partir da contagem.');
     }
+  }catch(err){
+    showToast('❌ Erro: '+err.message);
+    console.error(err);
   }
-  XLSX.utils.book_append_sheet(wb,ws,'Allfood');
-  const source=e.allfood_upload?'_upload':'';
-  XLSX.writeFile(wb,'Allfood_'+e.setor.replace(/[\s&]/g,'_')+'_'+e.data+source+'.xlsx');
-  showToast('✅ Download gerado!'+(e.allfood_upload?' (planilha do bar)':''));
 }
 
 async function exportEntry(key){
@@ -4065,96 +4063,34 @@ async function importarEGerarAllfood(input){
   const file=input.files[0];
   if(!file) return;
   input.value='';
-  showToast('⏳ Processando arquivo...',30000);
+
+  if(!nome||!data||!setor){
+    showToast('⚠️ Inicie uma contagem antes de importar.',4000);
+    return;
+  }
+
+  showToast('⏳ Salvando arquivo...',10000);
 
   try{
-    // ── 1. Read file ────────────────────────────────────────────
-    let allRows=[];
-    if(file.name.toLowerCase().endsWith('.csv')){
-      const txt=await file.text();
-      allRows=txt.split('\n').map(r=>r.split(/[,;\t]/).map(c=>c.trim().replace(/^"|"$/g,'')));
-    } else {
-      const buf=await file.arrayBuffer();
-      const wbIn=XLSX.read(buf,{type:'array'});
-      // Try Dashboard sheet first, then first sheet
-      const sheetName=wbIn.SheetNames.includes('Dashboard')?'Dashboard':wbIn.SheetNames[0];
-      const ws=wbIn.Sheets[sheetName];
-      allRows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-    }
+    // Read file as base64 - store EXACT original file
+    const buf=await file.arrayBuffer();
+    const bytes=new Uint8Array(buf);
+    let binary='';
+    bytes.forEach(b=>binary+=String.fromCharCode(b));
+    const base64=btoa(binary);
 
-    // ── 2. Find header row (has "Bebida"/"Produto"/"Nome") and qty col ──
-    let hdrIdx=0, nameCol=0, qtyCol=3;
-    for(let i=0;i<Math.min(allRows.length,10);i++){
-      const r=allRows[i].map(c=>normStr(c));
-      const niName=r.findIndex(c=>c==='BEBIDA'||c==='PRODUTO'||c==='NOME'||c==='DESCRICAO'||c.includes('NOME'));
-      const niQty =r.findIndex(c=>c.includes('TOTAL')&&c.includes('FECH')||c==='FECHADAS'||c.includes('QTD')||c.includes('QUANT')||c.includes('SALDO'));
-      if(niName>=0){hdrIdx=i; nameCol=niName; if(niQty>=0) qtyCol=niQty; break;}
-    }
-
-    const dataRows=allRows.slice(hdrIdx+1).filter(r=>r[nameCol]&&String(r[nameCol]).trim()!='');
-
-    // ── 3. Also get ML column if present ────────────────────────
-    const hdrRow=allRows[hdrIdx].map(c=>normStr(c));
-    const mlCol =hdrRow.findIndex(c=>c.includes('ML')||c.includes('ABERTA'));
-    const volCol=hdrRow.findIndex(c=>c==='VOLUME'||c.includes('VOL'));
-
-    // ── 4. Match by name against PRODUCTS ───────────────────────
-    const now=new Date();
-    const dtStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR');
-    const results=[];
-    let newCod=Math.max(...PRODUCTS.map(p=>parseInt(p.cod)||0))+1;
-
-    dataRows.forEach(r=>{
-      const pName=String(r[nameCol]||'').trim();
-      const qty  =parseFloat(String(r[qtyCol]||'0').replace(',','.').replace(/[^0-9.]/g,''))||0;
-      const ml   =mlCol>=0?parseFloat(String(r[mlCol]||'0').replace(',','.').replace(/[^0-9.]/g,''))||0:0;
-      const vol  =volCol>=0?parseFloat(String(r[volCol]||'0').replace(',','.').replace(/[^0-9.]/g,''))||0:0;
-      const mlBottles=vol>0&&ml>0?Math.round(ml/vol*1000)/1000:0;
-      const total=qty+mlBottles;
-
-      if(!pName||pName.length<2) return;
-
-      // Find best match
-      let bestScore=0, bestProd=null;
-      PRODUCTS.forEach(p=>{
-        const s=matchScore(pName,p.desc);
-        if(s>bestScore){bestScore=s;bestProd=p;}
-      });
-
-      if(bestScore>=0.5&&bestProd){
-        const meta=ALLFOOD_META[bestProd.cod]||['BEBIDAS',''];
-        results.push({cod:parseInt(bestProd.cod)||bestProd.cod,desc:bestProd.desc,
-          unit:bestProd.unit,classe:meta[0],sub:meta[1],total,isNew:false});
-      } else {
-        // New product — add to list runtime (not persistent)
-        results.push({cod:newCod++,desc:pName,unit:'UN',
-          classe:'BEBIDAS',sub:'BAR',total,isNew:true});
-      }
+    // Save to Firebase: original file as base64 + original filename
+    await db.ref('/inventario/'+fbKey()+'/allfood_upload').set({
+      base64: base64,
+      filename: file.name,
+      size: file.size,
+      salvo: new Date().toISOString()
     });
 
-    // Contar itens com quantidade
-    let n=0;
-    results.forEach(r=>{if(r.total>0) n++;});
-
-    // Salvar no Firebase (sem download imediato)
-    const allfoodRows=results.filter(r=>r.total>0).map(r=>({
-      cod:r.cod,desc:r.desc,unit:r.unit,classe:r.classe,sub:r.sub,total:r.total
-    }));
-    if(nome&&data&&setor){
-      try{
-        await db.ref('/inventario/'+fbKey()+'/allfood_upload').set({
-          rows:allfoodRows, arquivo:file.name, gerado:now.toISOString()
-        });
-        showToast('✅ '+n+' itens salvos! Faça o download na tela de Contagens.',5000);
-      }catch(err){
-        showToast('❌ Erro ao salvar: '+err.message);
-      }
-    } else {
-      showToast('⚠️ Inicie uma contagem antes de importar.',4000);
-    }
+    showToast('✅ Planilha "'+file.name+'" salva! Baixe na tela de Contagens.',5000);
 
   }catch(err){
-    showToast('❌ Erro: '+err.message);
+    showToast('❌ Erro ao salvar: '+err.message);
     console.error(err);
   }
 }
