@@ -3917,13 +3917,18 @@ async function openEntry(idx){
 async function downloadAllfood(idx){
   const key=window._adminKeys[idx];
   if(!key){showToast('Contagem não encontrada.');return;}
+  showToast('⏳ Gerando arquivo...',10000);
   const snap=await db.ref('/inventario/'+key).get();
   if(!snap.exists()) return;
   const e=snap.val();
-  const it=e.itens||{};
   const now=new Date();
   const dtStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR');
   const dataFmt=e.data?new Date(e.data+'T12:00:00').toLocaleDateString('pt-BR'):e.data;
+
+  const blueStyle={font:{bold:true,sz:11,name:'Calibri',color:{rgb:'FF020000'}},
+    fill:{patternType:'solid',fgColor:{rgb:'99CCFF'}},
+    border:{top:{style:'thin'},bottom:{style:'thin'}}};
+  const dfStyle={font:{sz:11,name:'Calibri'}};
 
   const wsData=[
     ['Relatório:','Lista para contagem','','','',''],
@@ -3938,22 +3943,32 @@ async function downloadAllfood(idx){
     ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE']
   ];
 
-  const blueStyle={font:{bold:true,sz:11,name:'Calibri',color:{rgb:'FF020000'}},
-    fill:{patternType:'solid',fgColor:{rgb:'99CCFF'}},
-    border:{top:{style:'thin'},bottom:{style:'thin'}}};
-  const dfStyle={font:{sz:11,name:'Calibri'}};
-
   let n=0;
-  PRODUCTS.forEach(p=>{
-    const q=it[p.cod];
-    if(q!=null&&parseFloat(q)>0){
-      const meta=ALLFOOD_META[p.cod]||['',''];
-      wsData.push([parseInt(p.cod)||p.cod,p.desc,p.unit,meta[0],meta[1],parseFloat(q)]);
-      n++;
-    }
-  });
-  wsData.push(['','','','','','']);
-  wsData.push(['Total de itens: ',n,'','','','']);
+
+  // Priority: use uploaded Pablo file if available
+  if(e.allfood_upload && e.allfood_upload.rows && e.allfood_upload.rows.length>0){
+    e.allfood_upload.rows.forEach(r=>{
+      if(r.total>0){
+        wsData.push([parseInt(r.cod)||r.cod,r.desc,r.unit,r.classe,r.sub,r.total]);
+        n++;
+      }
+    });
+    wsData.push(['','','','','','']);
+    wsData.push(['Total de itens: ',n,'','Fonte:',e.allfood_upload.arquivo||'upload','']);
+  } else {
+    // Fallback: use counted items from app
+    const it=e.itens||{};
+    PRODUCTS.forEach(p=>{
+      const q=it[p.cod];
+      if(q!=null&&parseFloat(q)>0){
+        const meta=ALLFOOD_META[p.cod]||['',''];
+        wsData.push([parseInt(p.cod)||p.cod,p.desc,p.unit,meta[0],meta[1],parseFloat(q)]);
+        n++;
+      }
+    });
+    wsData.push(['','','','','','']);
+    wsData.push(['Total de itens: ',n,'','','','']);
+  }
 
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet(wsData);
@@ -3969,8 +3984,9 @@ async function downloadAllfood(idx){
     }
   }
   XLSX.utils.book_append_sheet(wb,ws,'Allfood');
-  XLSX.writeFile(wb,'Allfood_'+e.setor.replace(/[\s&]/g,'_')+'_'+e.data+'.xlsx');
-  showToast('✅ Download Allfood gerado!');
+  const source=e.allfood_upload?'_upload':'';
+  XLSX.writeFile(wb,'Allfood_'+e.setor.replace(/[\s&]/g,'_')+'_'+e.data+source+'.xlsx');
+  showToast('✅ Download gerado!'+(e.allfood_upload?' (planilha do bar)':''));
 }
 
 async function exportEntry(key){
@@ -4167,8 +4183,23 @@ async function importarEGerarAllfood(input){
     const fname='Allfood_'+file.name.replace(/\.[^.]+$/,'')+'_'+now.toISOString().slice(0,10)+'.xlsx';
     XLSX.writeFile(wbOut,fname);
 
-    const newCount=results.filter(r=>r.isNew&&r.total>0).length;
-    showToast('✅ '+n+' itens exportados! ('+newCount+' novos em verde)',5000);
+    // Save Allfood data to Firebase linked to current contagem
+    const allfoodRows=results.filter(r=>r.total>0).map(r=>({
+      cod:r.cod,desc:r.desc,unit:r.unit,classe:r.classe,sub:r.sub,total:r.total
+    }));
+    if(nome&&data&&setor){
+      try{
+        await db.ref('/inventario/'+fbKey()+'/allfood_upload').set({
+          rows:allfoodRows, arquivo:file.name, gerado:now.toISOString()
+        });
+        showToast('✅ '+n+' itens exportados e vinculados à contagem!',5000);
+      }catch{
+        showToast('✅ '+n+' itens exportados!',5000);
+      }
+    } else {
+      const newCount=results.filter(r=>r.isNew&&r.total>0).length;
+      showToast('✅ '+n+' itens exportados! ('+newCount+' novos em verde)',5000);
+    }
 
   }catch(err){
     showToast('❌ Erro: '+err.message);
