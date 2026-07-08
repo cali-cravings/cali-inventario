@@ -4132,58 +4132,11 @@ async function importarEGerarAllfood(input){
       }
     });
 
-    // ── 5. Build Allfood XLSX ───────────────────────────────────
-    const wsData=[
-      ['Relatório:','Lista para contagem','','','',''],
-      ['Emissão:',dtStr,'','','',''],
-      ['Empresa:','CALI CRAVINGS BAR E GRILL','','','',''],
-      ['','','','','',''],
-      ['Origem:',file.name,'','','',''],
-      ['Classe:','TODAS','','','',''],
-      ['Sub-Classe:','TODAS','','','',''],
-      ['','','','','',''],
-      ['','','','','',''],
-      ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE']
-    ];
-
-    const blueStyle={font:{bold:true,sz:11,name:'Calibri',color:{rgb:'FF020000'}},
-      fill:{patternType:'solid',fgColor:{rgb:'99CCFF'}},
-      border:{top:{style:'thin'},bottom:{style:'thin'}}};
-    const dfStyle={font:{sz:11,name:'Calibri'}};
-    const newStyle={font:{sz:11,name:'Calibri',color:{rgb:'1a5c36'}},
-      fill:{patternType:'solid',fgColor:{rgb:'EDF8F2'}}};
-
+    // Contar itens com quantidade
     let n=0;
-    results.forEach(r=>{if(r.total>0){wsData.push([r.cod,r.desc,r.unit,r.classe,r.sub,r.total]);n++;}});
-    wsData.push(['','','','','','']);
-    wsData.push(['Total de itens: ',n,'','','','']);
+    results.forEach(r=>{if(r.total>0) n++;});
 
-    const wbOut=XLSX.utils.book_new();
-    const wsOut=XLSX.utils.aoa_to_sheet(wsData);
-    wsOut['!cols']=[{wch:12},{wch:48},{wch:8},{wch:20},{wch:22},{wch:12}];
-
-    // Apply styles
-    const range=XLSX.utils.decode_range(wsOut['!ref']);
-    for(let c=range.s.c;c<=range.e.c;c++){
-      const h=XLSX.utils.encode_cell({r:9,c});
-      if(wsOut[h]) wsOut[h].s=blueStyle;
-    }
-    results.forEach((r,i)=>{
-      if(r.total>0){
-        for(let c=0;c<6;c++){
-          const addr=XLSX.utils.encode_cell({r:10+i,c});
-          if(wsOut[addr]) wsOut[addr].s=r.isNew?newStyle:dfStyle;
-        }
-      }
-    });
-
-    XLSX.utils.book_append_sheet(wbOut,wsOut,'Allfood');
-
-    // Download
-    const fname='Allfood_'+file.name.replace(/\.[^.]+$/,'')+'_'+now.toISOString().slice(0,10)+'.xlsx';
-    XLSX.writeFile(wbOut,fname);
-
-    // Save Allfood data to Firebase linked to current contagem
+    // Salvar no Firebase (sem download imediato)
     const allfoodRows=results.filter(r=>r.total>0).map(r=>({
       cod:r.cod,desc:r.desc,unit:r.unit,classe:r.classe,sub:r.sub,total:r.total
     }));
@@ -4192,13 +4145,12 @@ async function importarEGerarAllfood(input){
         await db.ref('/inventario/'+fbKey()+'/allfood_upload').set({
           rows:allfoodRows, arquivo:file.name, gerado:now.toISOString()
         });
-        showToast('✅ '+n+' itens exportados e vinculados à contagem!',5000);
-      }catch{
-        showToast('✅ '+n+' itens exportados!',5000);
+        showToast('✅ '+n+' itens salvos! Faça o download na tela de Contagens.',5000);
+      }catch(err){
+        showToast('❌ Erro ao salvar: '+err.message);
       }
     } else {
-      const newCount=results.filter(r=>r.isNew&&r.total>0).length;
-      showToast('✅ '+n+' itens exportados! ('+newCount+' novos em verde)',5000);
+      showToast('⚠️ Inicie uma contagem antes de importar.',4000);
     }
 
   }catch(err){
