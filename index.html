@@ -3922,7 +3922,7 @@ async function downloadAllfood(idx){
   try{
     const snap=await db.ref('/inventario/'+key+'/allfood_upload').get();
 
-    if(snap.exists()){
+    if(snap.exists() && snap.val().base64){
       const up=snap.val();
 
       // Reconstruct exact original file from base64
