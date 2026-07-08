@@ -227,6 +227,8 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
   border:1.5px solid #e05252;background:var(--branco);color:#e05252;
   transition:all .13s;flex-shrink:0;}
 .btn-del:hover{background:#e05252;color:var(--branco);}
+.btn-dl{border-color:var(--verde);color:var(--verde);background:var(--verde-soft);}
+.btn-dl:hover{background:var(--verde);color:var(--branco);}
 .btn-resume{border-color:#d4a017;color:#d4a017;}
 .btn-resume:hover{background:#d4a017;color:var(--branco);}
 .btn-view{border-color:#2e7d4f;color:#2e7d4f;}
@@ -406,29 +408,6 @@ if('serviceWorker' in navigator){
     <div id="admin-list"></div>
     <div style="margin-top:16px">
       <button class="btn-out" style="width:auto;padding:9px 18px" onclick="showScreen('inventory')">← Voltar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL IMPORTAR -->
-<div class="overlay" id="overlay-import">
-  <div class="modal" style="max-width:440px;">
-    <h3>📂 Importar Excel</h3>
-    <p id="import-msg" style="margin-bottom:12px;"></p>
-    <div id="import-preview" style="max-height:200px;overflow-y:auto;font-size:12px;margin-bottom:16px;"></div>
-    <div id="import-col-sel" style="display:none;margin-bottom:16px;">
-      <div class="fld">
-        <label>Coluna do CÓDIGO</label>
-        <select id="sel-cod" style="width:100%;padding:8px;border:1.5px solid var(--borda);border-radius:8px;font-family:'DM Sans',sans-serif;"></select>
-      </div>
-      <div class="fld" style="margin-top:10px;">
-        <label>Coluna da QUANTIDADE</label>
-        <select id="sel-qty" style="width:100%;padding:8px;border:1.5px solid var(--borda);border-radius:8px;font-family:'DM Sans',sans-serif;"></select>
-      </div>
-    </div>
-    <div class="modal-btns">
-      <button class="btn-out" onclick="closeImportModal()">Cancelar</button>
-      <button class="btn-go" id="btn-confirm-import" onclick="confirmarImport()" style="display:none">✅ Importar</button>
     </div>
   </div>
 </div>
@@ -3899,6 +3878,7 @@ async function loadAdmin(){
             ${isEnviado?'✅ Enviado':'⏳ Rascunho'}</span>
           ${actionBtn}
           <button class="btn-sm" onclick="exportEntry(window._adminKeys[${i}])">Excel</button>
+          <button class="btn-sm btn-dl" onclick="downloadAllfood(${i})" title="Download Allfood">⬇️ Allfood</button>
           <button class="btn-del" onclick="confirmDelete(window._adminKeys[${i}])" title="Excluir">🗑️</button>
         </div>
       </div>`;
@@ -3932,6 +3912,65 @@ async function openEntry(idx){
   document.getElementById('btn-gravar').disabled = submitted;
 
   showToast(submitted ? '👁️ Visualizando contagem enviada (somente leitura).' : '↩️ Retomando rascunho...');
+}
+
+async function downloadAllfood(idx){
+  const key=window._adminKeys[idx];
+  if(!key){showToast('Contagem não encontrada.');return;}
+  const snap=await db.ref('/inventario/'+key).get();
+  if(!snap.exists()) return;
+  const e=snap.val();
+  const it=e.itens||{};
+  const now=new Date();
+  const dtStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR');
+  const dataFmt=e.data?new Date(e.data+'T12:00:00').toLocaleDateString('pt-BR'):e.data;
+
+  const wsData=[
+    ['Relatório:','Lista para contagem','','','',''],
+    ['Emissão:',dtStr,'','','',''],
+    ['Empresa:','CALI CRAVINGS BAR E GRILL','','','',''],
+    ['','','','','',''],
+    ['Setor:',e.setor,'Data:',dataFmt,'Colaborador:',e.colaborador],
+    ['Classe:','TODAS','','','',''],
+    ['Sub-Classe:','TODAS','','','',''],
+    ['','','','','',''],
+    ['','','','','',''],
+    ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE']
+  ];
+
+  const blueStyle={font:{bold:true,sz:11,name:'Calibri',color:{rgb:'FF020000'}},
+    fill:{patternType:'solid',fgColor:{rgb:'99CCFF'}},
+    border:{top:{style:'thin'},bottom:{style:'thin'}}};
+  const dfStyle={font:{sz:11,name:'Calibri'}};
+
+  let n=0;
+  PRODUCTS.forEach(p=>{
+    const q=it[p.cod];
+    if(q!=null&&parseFloat(q)>0){
+      const meta=ALLFOOD_META[p.cod]||['',''];
+      wsData.push([parseInt(p.cod)||p.cod,p.desc,p.unit,meta[0],meta[1],parseFloat(q)]);
+      n++;
+    }
+  });
+  wsData.push(['','','','','','']);
+  wsData.push(['Total de itens: ',n,'','','','']);
+
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=[{wch:12},{wch:48},{wch:8},{wch:20},{wch:22},{wch:12}];
+
+  const range=XLSX.utils.decode_range(ws['!ref']);
+  for(let c=range.s.c;c<=range.e.c;c++){
+    const h=XLSX.utils.encode_cell({r:9,c});
+    if(ws[h]) ws[h].s=blueStyle;
+    for(let r=10;r<=range.e.r;r++){
+      const d=XLSX.utils.encode_cell({r,c});
+      if(ws[d]) ws[d].s=dfStyle;
+    }
+  }
+  XLSX.utils.book_append_sheet(wb,ws,'Allfood');
+  XLSX.writeFile(wb,'Allfood_'+e.setor.replace(/[\s&]/g,'_')+'_'+e.data+'.xlsx');
+  showToast('✅ Download Allfood gerado!');
 }
 
 async function exportEntry(key){
