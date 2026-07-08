@@ -3457,6 +3457,7 @@ async function startInventory(forceNew){
 
   showScreen('inventory');
   buildList();
+  updImportBtn();
 
   if(submitted){
     document.getElementById('btn-enviar').disabled=true;
@@ -3468,6 +3469,11 @@ async function startInventory(forceNew){
 
   btn.textContent='Iniciar Contagem →';
   btn.disabled=false;
+}
+/* Mostra o botão Importar apenas em setores de BAR */
+function updImportBtn(){
+  const btn=document.getElementById('btn-import');
+  if(btn) btn.classList.toggle('gone', !setor.includes('BAR'));
 }
 
 /* ── BUILD LIST ──────────────────────────────── */
@@ -3878,7 +3884,6 @@ async function loadAdmin(){
             ${isEnviado?'✅ Enviado':'⏳ Rascunho'}</span>
           ${actionBtn}
           <button class="btn-sm" onclick="exportEntry(window._adminKeys[${i}])">Excel</button>
-          <button class="btn-sm btn-dl" onclick="downloadAllfood(${i})" title="Download Allfood">⬇️ Allfood</button>
           <button class="btn-del" onclick="confirmDelete(window._adminKeys[${i}])" title="Excluir">🗑️</button>
         </div>
       </div>`;
@@ -3905,6 +3910,7 @@ async function openEntry(idx){
 
   showScreen('inventory');
   buildList();
+  updImportBtn();
 
   document.getElementById('sub-banner').classList.toggle('gone', !submitted);
   document.getElementById('btn-enviar').disabled = submitted;
