@@ -364,9 +364,9 @@ if('serviceWorker' in navigator){
     <input type="text" class="search-inp" id="search-inp"
       placeholder="🔍  Buscar produto ou código..."
       oninput="filterProds(this.value)">
-    <label class="btn-import" id="btn-import" title="Importar Excel">
-      📂 Excel
-      <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" onchange="importarExcel(this)">
+    <label class="btn-import" id="btn-import" title="Upload Excel → Download Allfood">
+      📂 Importar
+      <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" onchange="importarEGerarAllfood(this)">
     </label>
     <button class="btn-gravar" id="btn-gravar" onclick="saveProgress()">💾 Gravar</button>
   </div>
@@ -3993,128 +3993,148 @@ async function exportEntry(key){
 }
 
 
-/* ── IMPORTAR EXCEL ─────────────────────────── */
-let _importData = null;
-
-function closeImportModal(){
-  document.getElementById('overlay-import').classList.remove('on');
-  document.getElementById('import-file-input').value='';
-  _importData = null;
+/* ── IMPORTAR EXCEL → GERAR ALLFOOD ─────────── */
+function normStr(s){
+  return String(s||'').toUpperCase().trim()
+    .replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+}
+function matchScore(a,b){
+  const wa=new Set(normStr(a).split(' ').filter(w=>w.length>2));
+  const wb=new Set(normStr(b).split(' ').filter(w=>w.length>2));
+  if(!wa.size||!wb.size) return 0;
+  let inter=0; wa.forEach(w=>{if(wb.has(w))inter++;});
+  return inter/Math.max(wa.size,wb.size);
 }
 
-async function importarExcel(input){
-  const file = input.files[0];
+async function importarEGerarAllfood(input){
+  const file=input.files[0];
   if(!file) return;
-  const fname = file.name.toLowerCase();
+  input.value='';
+  showToast('⏳ Processando arquivo...',30000);
 
-  showToast('⏳ Lendo arquivo...',10000);
-
-  if(fname.endsWith('.csv')){
-    const text = await file.text();
-    const rows = text.split('\n').map(r=>r.split(/[,;\t]/).map(c=>c.trim().replace(/^"|"$/g,'')));
-    _importData = rows;
-    abrirModalImport(rows);
-  } else {
-    // Use XLSX lib
-    const buf = await file.arrayBuffer();
-    const wb  = XLSX.read(buf, {type:'array'});
-    const ws  = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-    _importData = rows;
-    abrirModalImport(rows);
-  }
-}
-
-function abrirModalImport(rows){
-  if(!rows || rows.length<2){
-    showToast('❌ Arquivo vazio ou inválido.');return;
-  }
-
-  // Find header row - look for row containing COD or code-like column
-  let headerRowIdx = 0;
-  for(let i=0;i<Math.min(rows.length,15);i++){
-    const r = rows[i].map(c=>String(c).toUpperCase());
-    if(r.some(c=>c.includes('COD')||c==='ID'||c==='CODIGO') &&
-       r.some(c=>c.includes('QTD')||c.includes('QUANT')||c.includes('ESTOQUE')||c.includes('TOTAL'))){
-      headerRowIdx = i; break;
+  try{
+    // ── 1. Read file ────────────────────────────────────────────
+    let allRows=[];
+    if(file.name.toLowerCase().endsWith('.csv')){
+      const txt=await file.text();
+      allRows=txt.split('\n').map(r=>r.split(/[,;\t]/).map(c=>c.trim().replace(/^"|"$/g,'')));
+    } else {
+      const buf=await file.arrayBuffer();
+      const wbIn=XLSX.read(buf,{type:'array'});
+      // Try Dashboard sheet first, then first sheet
+      const sheetName=wbIn.SheetNames.includes('Dashboard')?'Dashboard':wbIn.SheetNames[0];
+      const ws=wbIn.Sheets[sheetName];
+      allRows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
     }
+
+    // ── 2. Find header row (has "Bebida"/"Produto"/"Nome") and qty col ──
+    let hdrIdx=0, nameCol=0, qtyCol=3;
+    for(let i=0;i<Math.min(allRows.length,10);i++){
+      const r=allRows[i].map(c=>normStr(c));
+      const niName=r.findIndex(c=>c==='BEBIDA'||c==='PRODUTO'||c==='NOME'||c==='DESCRICAO'||c.includes('NOME'));
+      const niQty =r.findIndex(c=>c.includes('TOTAL')&&c.includes('FECH')||c==='FECHADAS'||c.includes('QTD')||c.includes('QUANT')||c.includes('SALDO'));
+      if(niName>=0){hdrIdx=i; nameCol=niName; if(niQty>=0) qtyCol=niQty; break;}
+    }
+
+    const dataRows=allRows.slice(hdrIdx+1).filter(r=>r[nameCol]&&String(r[nameCol]).trim()!='');
+
+    // ── 3. Also get ML column if present ────────────────────────
+    const hdrRow=allRows[hdrIdx].map(c=>normStr(c));
+    const mlCol =hdrRow.findIndex(c=>c.includes('ML')||c.includes('ABERTA'));
+    const volCol=hdrRow.findIndex(c=>c==='VOLUME'||c.includes('VOL'));
+
+    // ── 4. Match by name against PRODUCTS ───────────────────────
+    const now=new Date();
+    const dtStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR');
+    const results=[];
+    let newCod=Math.max(...PRODUCTS.map(p=>parseInt(p.cod)||0))+1;
+
+    dataRows.forEach(r=>{
+      const pName=String(r[nameCol]||'').trim();
+      const qty  =parseFloat(String(r[qtyCol]||'0').replace(',','.').replace(/[^0-9.]/g,''))||0;
+      const ml   =mlCol>=0?parseFloat(String(r[mlCol]||'0').replace(',','.').replace(/[^0-9.]/g,''))||0:0;
+      const vol  =volCol>=0?parseFloat(String(r[volCol]||'0').replace(',','.').replace(/[^0-9.]/g,''))||0:0;
+      const mlBottles=vol>0&&ml>0?Math.round(ml/vol*1000)/1000:0;
+      const total=qty+mlBottles;
+
+      if(!pName||pName.length<2) return;
+
+      // Find best match
+      let bestScore=0, bestProd=null;
+      PRODUCTS.forEach(p=>{
+        const s=matchScore(pName,p.desc);
+        if(s>bestScore){bestScore=s;bestProd=p;}
+      });
+
+      if(bestScore>=0.5&&bestProd){
+        const meta=ALLFOOD_META[bestProd.cod]||['BEBIDAS',''];
+        results.push({cod:parseInt(bestProd.cod)||bestProd.cod,desc:bestProd.desc,
+          unit:bestProd.unit,classe:meta[0],sub:meta[1],total,isNew:false});
+      } else {
+        // New product — add to list runtime (not persistent)
+        results.push({cod:newCod++,desc:pName,unit:'UN',
+          classe:'BEBIDAS',sub:'BAR',total,isNew:true});
+      }
+    });
+
+    // ── 5. Build Allfood XLSX ───────────────────────────────────
+    const wsData=[
+      ['Relatório:','Lista para contagem','','','',''],
+      ['Emissão:',dtStr,'','','',''],
+      ['Empresa:','CALI CRAVINGS BAR E GRILL','','','',''],
+      ['','','','','',''],
+      ['Origem:',file.name,'','','',''],
+      ['Classe:','TODAS','','','',''],
+      ['Sub-Classe:','TODAS','','','',''],
+      ['','','','','',''],
+      ['','','','','',''],
+      ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE']
+    ];
+
+    const blueStyle={font:{bold:true,sz:11,name:'Calibri',color:{rgb:'FF020000'}},
+      fill:{patternType:'solid',fgColor:{rgb:'99CCFF'}},
+      border:{top:{style:'thin'},bottom:{style:'thin'}}};
+    const dfStyle={font:{sz:11,name:'Calibri'}};
+    const newStyle={font:{sz:11,name:'Calibri',color:{rgb:'1a5c36'}},
+      fill:{patternType:'solid',fgColor:{rgb:'EDF8F2'}}};
+
+    let n=0;
+    results.forEach(r=>{if(r.total>0){wsData.push([r.cod,r.desc,r.unit,r.classe,r.sub,r.total]);n++;}});
+    wsData.push(['','','','','','']);
+    wsData.push(['Total de itens: ',n,'','','','']);
+
+    const wbOut=XLSX.utils.book_new();
+    const wsOut=XLSX.utils.aoa_to_sheet(wsData);
+    wsOut['!cols']=[{wch:12},{wch:48},{wch:8},{wch:20},{wch:22},{wch:12}];
+
+    // Apply styles
+    const range=XLSX.utils.decode_range(wsOut['!ref']);
+    for(let c=range.s.c;c<=range.e.c;c++){
+      const h=XLSX.utils.encode_cell({r:9,c});
+      if(wsOut[h]) wsOut[h].s=blueStyle;
+    }
+    results.forEach((r,i)=>{
+      if(r.total>0){
+        for(let c=0;c<6;c++){
+          const addr=XLSX.utils.encode_cell({r:10+i,c});
+          if(wsOut[addr]) wsOut[addr].s=r.isNew?newStyle:dfStyle;
+        }
+      }
+    });
+
+    XLSX.utils.book_append_sheet(wbOut,wsOut,'Allfood');
+
+    // Download
+    const fname='Allfood_'+file.name.replace(/\.[^.]+$/,'')+'_'+now.toISOString().slice(0,10)+'.xlsx';
+    XLSX.writeFile(wbOut,fname);
+
+    const newCount=results.filter(r=>r.isNew&&r.total>0).length;
+    showToast('✅ '+n+' itens exportados! ('+newCount+' novos em verde)',5000);
+
+  }catch(err){
+    showToast('❌ Erro: '+err.message);
+    console.error(err);
   }
-
-  const headers = rows[headerRowIdx].map((c,i)=>({label:String(c)||'Coluna '+(i+1), idx:i}));
-  const dataRows = rows.slice(headerRowIdx+1).filter(r=>r.some(c=>c!==''));
-
-  // Build preview table
-  const preview = document.getElementById('import-preview');
-  let tbl = '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
-  tbl += '<tr>'+ headers.map(h=>`<th style="border:1px solid #ddd;padding:4px;background:#f5f0e8;text-align:left">${h.label}</th>`).join('') +'</tr>';
-  dataRows.slice(0,5).forEach(r=>{
-    tbl += '<tr>'+r.map(c=>`<td style="border:1px solid #eee;padding:4px;">${String(c).substring(0,20)}</td>`).join('')+'</tr>';
-  });
-  tbl += '</table>';
-  preview.innerHTML = tbl;
-
-  // Populate column selectors
-  const selCod = document.getElementById('sel-cod');
-  const selQty = document.getElementById('sel-qty');
-  selCod.innerHTML = headers.map(h=>`<option value="${h.idx}">${h.label}</option>`).join('');
-  selQty.innerHTML = headers.map(h=>`<option value="${h.idx}">${h.label}</option>`).join('');
-
-  // Auto-detect best columns
-  const codIdx = headers.findIndex(h=>{
-    const l=h.label.toUpperCase();
-    return l.includes('COD')||l==='ID'||l.includes('CODIGO');
-  });
-  const qtyIdx = headers.findIndex(h=>{
-    const l=h.label.toUpperCase();
-    return l.includes('QTD')||l.includes('QUANT')||l.includes('ESTOQUE')||l.includes('TOTAL')||l.includes('SALDO');
-  });
-  if(codIdx>=0) selCod.value=codIdx;
-  if(qtyIdx>=0) selQty.value=qtyIdx;
-
-  document.getElementById('import-msg').innerHTML =
-    `<b>${dataRows.length} linhas</b> encontradas no arquivo. Confira as colunas abaixo e clique em Importar.`;
-  document.getElementById('import-col-sel').style.display='block';
-  document.getElementById('btn-confirm-import').style.display='block';
-  document.getElementById('overlay-import').classList.add('on');
-
-  // store header row index
-  window._importHeaderIdx = headerRowIdx;
-}
-
-function confirmarImport(){
-  if(!_importData){closeImportModal();return;}
-  const codCol = parseInt(document.getElementById('sel-cod').value);
-  const qtyCol = parseInt(document.getElementById('sel-qty').value);
-  const rows   = _importData.slice(window._importHeaderIdx+1).filter(r=>r.some(c=>c!==''));
-
-  let matched=0, skipped=0;
-  const codMap = {};
-  PRODUCTS.forEach(p=>{ codMap[String(parseInt(p.cod)||p.cod)] = p.cod; });
-
-  rows.forEach(r=>{
-    const rawCod = String(r[codCol]||'').trim().split('.')[0];
-    const rawQty = String(r[qtyCol]||'').trim().replace(',','.');
-    const qty    = parseFloat(rawQty);
-    if(!rawCod||isNaN(qty)||qty<=0){skipped++;return;}
-    // Match by cod
-    const appCod = codMap[rawCod] || rawCod;
-    const prodExists = PRODUCTS.find(p=>p.cod===appCod);
-    if(prodExists){
-      saved[appCod]=qty;
-      // Update input field if visible
-      const el=document.getElementById('q'+appCod);
-      if(el){el.value=qty;el.classList.add('filled');}
-      const row=document.getElementById('row'+appCod);
-      if(row) row.classList.add('lit');
-      matched++;
-    } else { skipped++; }
-  });
-
-  closeImportModal();
-  updProg(); updBadges();
-  showToast('✅ '+matched+' itens importados! '+skipped+' não encontrados.',4000);
-  // Auto-save draft
-  if(matched>0) saveProgress();
 }
 
 /* ── DELETE ──────────────────────────────────── */
