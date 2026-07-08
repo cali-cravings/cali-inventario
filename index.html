@@ -112,6 +112,12 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
   font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;
   transition:background .15s;}
 .btn-gravar:hover{background:rgba(245,240,232,.28);}
+.btn-import{padding:8px 11px;white-space:nowrap;background:rgba(245,240,232,.92);
+  border:none;border-radius:8px;color:var(--verde);
+  font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;
+  transition:all .15s;display:flex;align-items:center;gap:4px;}
+.btn-import:hover{background:#ffffff;}
+#import-file-input{display:none;}
 
 /* ─── INV BODY ── */
 .inv-body{padding:11px 14px 120px;}
@@ -358,6 +364,10 @@ if('serviceWorker' in navigator){
     <input type="text" class="search-inp" id="search-inp"
       placeholder="🔍  Buscar produto ou código..."
       oninput="filterProds(this.value)">
+    <label class="btn-import" id="btn-import" title="Importar Excel">
+      📂 Excel
+      <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" onchange="importarExcel(this)">
+    </label>
     <button class="btn-gravar" id="btn-gravar" onclick="saveProgress()">💾 Gravar</button>
   </div>
   <div class="inv-body" id="inv-body">
@@ -396,6 +406,29 @@ if('serviceWorker' in navigator){
     <div id="admin-list"></div>
     <div style="margin-top:16px">
       <button class="btn-out" style="width:auto;padding:9px 18px" onclick="showScreen('inventory')">← Voltar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORTAR -->
+<div class="overlay" id="overlay-import">
+  <div class="modal" style="max-width:440px;">
+    <h3>📂 Importar Excel</h3>
+    <p id="import-msg" style="margin-bottom:12px;"></p>
+    <div id="import-preview" style="max-height:200px;overflow-y:auto;font-size:12px;margin-bottom:16px;"></div>
+    <div id="import-col-sel" style="display:none;margin-bottom:16px;">
+      <div class="fld">
+        <label>Coluna do CÓDIGO</label>
+        <select id="sel-cod" style="width:100%;padding:8px;border:1.5px solid var(--borda);border-radius:8px;font-family:'DM Sans',sans-serif;"></select>
+      </div>
+      <div class="fld" style="margin-top:10px;">
+        <label>Coluna da QUANTIDADE</label>
+        <select id="sel-qty" style="width:100%;padding:8px;border:1.5px solid var(--borda);border-radius:8px;font-family:'DM Sans',sans-serif;"></select>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-out" onclick="closeImportModal()">Cancelar</button>
+      <button class="btn-go" id="btn-confirm-import" onclick="confirmarImport()" style="display:none">✅ Importar</button>
     </div>
   </div>
 </div>
@@ -3731,6 +3764,130 @@ async function exportEntry(key){
   XLSX.writeFile(wb,'Contagem_'+e.setor.replace(/[\s&]/g,'_')+'_'+e.data+'.xlsx');
 }
 
+
+/* ── IMPORTAR EXCEL ─────────────────────────── */
+let _importData = null;
+
+function closeImportModal(){
+  document.getElementById('overlay-import').classList.remove('on');
+  document.getElementById('import-file-input').value='';
+  _importData = null;
+}
+
+async function importarExcel(input){
+  const file = input.files[0];
+  if(!file) return;
+  const fname = file.name.toLowerCase();
+
+  showToast('⏳ Lendo arquivo...',10000);
+
+  if(fname.endsWith('.csv')){
+    const text = await file.text();
+    const rows = text.split('\n').map(r=>r.split(/[,;\t]/).map(c=>c.trim().replace(/^"|"$/g,'')));
+    _importData = rows;
+    abrirModalImport(rows);
+  } else {
+    // Use XLSX lib
+    const buf = await file.arrayBuffer();
+    const wb  = XLSX.read(buf, {type:'array'});
+    const ws  = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    _importData = rows;
+    abrirModalImport(rows);
+  }
+}
+
+function abrirModalImport(rows){
+  if(!rows || rows.length<2){
+    showToast('❌ Arquivo vazio ou inválido.');return;
+  }
+
+  // Find header row - look for row containing COD or code-like column
+  let headerRowIdx = 0;
+  for(let i=0;i<Math.min(rows.length,15);i++){
+    const r = rows[i].map(c=>String(c).toUpperCase());
+    if(r.some(c=>c.includes('COD')||c==='ID'||c==='CODIGO') &&
+       r.some(c=>c.includes('QTD')||c.includes('QUANT')||c.includes('ESTOQUE')||c.includes('TOTAL'))){
+      headerRowIdx = i; break;
+    }
+  }
+
+  const headers = rows[headerRowIdx].map((c,i)=>({label:String(c)||'Coluna '+(i+1), idx:i}));
+  const dataRows = rows.slice(headerRowIdx+1).filter(r=>r.some(c=>c!==''));
+
+  // Build preview table
+  const preview = document.getElementById('import-preview');
+  let tbl = '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
+  tbl += '<tr>'+ headers.map(h=>`<th style="border:1px solid #ddd;padding:4px;background:#f5f0e8;text-align:left">${h.label}</th>`).join('') +'</tr>';
+  dataRows.slice(0,5).forEach(r=>{
+    tbl += '<tr>'+r.map(c=>`<td style="border:1px solid #eee;padding:4px;">${String(c).substring(0,20)}</td>`).join('')+'</tr>';
+  });
+  tbl += '</table>';
+  preview.innerHTML = tbl;
+
+  // Populate column selectors
+  const selCod = document.getElementById('sel-cod');
+  const selQty = document.getElementById('sel-qty');
+  selCod.innerHTML = headers.map(h=>`<option value="${h.idx}">${h.label}</option>`).join('');
+  selQty.innerHTML = headers.map(h=>`<option value="${h.idx}">${h.label}</option>`).join('');
+
+  // Auto-detect best columns
+  const codIdx = headers.findIndex(h=>{
+    const l=h.label.toUpperCase();
+    return l.includes('COD')||l==='ID'||l.includes('CODIGO');
+  });
+  const qtyIdx = headers.findIndex(h=>{
+    const l=h.label.toUpperCase();
+    return l.includes('QTD')||l.includes('QUANT')||l.includes('ESTOQUE')||l.includes('TOTAL')||l.includes('SALDO');
+  });
+  if(codIdx>=0) selCod.value=codIdx;
+  if(qtyIdx>=0) selQty.value=qtyIdx;
+
+  document.getElementById('import-msg').innerHTML =
+    `<b>${dataRows.length} linhas</b> encontradas no arquivo. Confira as colunas abaixo e clique em Importar.`;
+  document.getElementById('import-col-sel').style.display='block';
+  document.getElementById('btn-confirm-import').style.display='block';
+  document.getElementById('overlay-import').classList.add('on');
+
+  // store header row index
+  window._importHeaderIdx = headerRowIdx;
+}
+
+function confirmarImport(){
+  if(!_importData){closeImportModal();return;}
+  const codCol = parseInt(document.getElementById('sel-cod').value);
+  const qtyCol = parseInt(document.getElementById('sel-qty').value);
+  const rows   = _importData.slice(window._importHeaderIdx+1).filter(r=>r.some(c=>c!==''));
+
+  let matched=0, skipped=0;
+  const codMap = {};
+  PRODUCTS.forEach(p=>{ codMap[String(parseInt(p.cod)||p.cod)] = p.cod; });
+
+  rows.forEach(r=>{
+    const rawCod = String(r[codCol]||'').trim().split('.')[0];
+    const rawQty = String(r[qtyCol]||'').trim().replace(',','.');
+    const qty    = parseFloat(rawQty);
+    if(!rawCod||isNaN(qty)||qty<=0){skipped++;return;}
+    // Match by cod
+    const appCod = codMap[rawCod] || rawCod;
+    const prodExists = PRODUCTS.find(p=>p.cod===appCod);
+    if(prodExists){
+      saved[appCod]=qty;
+      // Update input field if visible
+      const el=document.getElementById('q'+appCod);
+      if(el){el.value=qty;el.classList.add('filled');}
+      const row=document.getElementById('row'+appCod);
+      if(row) row.classList.add('lit');
+      matched++;
+    } else { skipped++; }
+  });
+
+  closeImportModal();
+  updProg(); updBadges();
+  showToast('✅ '+matched+' itens importados! '+skipped+' não encontrados.',4000);
+  // Auto-save draft
+  if(matched>0) saveProgress();
+}
 
 /* ── DELETE ──────────────────────────────────── */
 let _delKey=null;
