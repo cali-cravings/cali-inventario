@@ -3670,7 +3670,7 @@ async function saveProgress(){
   const btn=document.getElementById('btn-gravar');
   btn.textContent='⏳ Salvando...';
   try{
-    await db.ref('/inventario/'+fbKey()).set({
+    await db.ref('/inventario/'+fbKey()).update({
       colaborador:nome,data,setor,status:'andamento',
       timestamp:Date.now(),itens:saved,porcoes:savedPorc
     });
@@ -3686,7 +3686,7 @@ function closeModal(){document.getElementById('overlay').classList.remove('on');
 async function submitInventory(){
   closeModal();
   try{
-    await db.ref('/inventario/'+fbKey()).set({
+    await db.ref('/inventario/'+fbKey()).update({
       colaborador:nome,data,setor,status:'enviado',
       timestamp:Date.now(),tsEnvio:Date.now(),itens:saved,porcoes:savedPorc
     });
