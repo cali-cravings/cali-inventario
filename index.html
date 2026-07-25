@@ -229,6 +229,8 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
 .btn-del:hover{background:#e05252;color:var(--branco);}
 .btn-dl{border-color:var(--verde);color:var(--verde);background:var(--verde-soft);}
 .btn-dl:hover{background:var(--verde);color:var(--branco);}
+.btn-dl.off{opacity:.4;cursor:not-allowed;background:var(--areia-esc);color:var(--muted);border-color:var(--borda);}
+.btn-dl.off:hover{background:var(--areia-esc);color:var(--muted);}
 .btn-resume{border-color:#d4a017;color:#d4a017;}
 .btn-resume:hover{background:#d4a017;color:var(--branco);}
 .btn-view{border-color:#2e7d4f;color:#2e7d4f;}
@@ -335,22 +337,11 @@ if('serviceWorker' in navigator){
     <div class="card">
       <div class="card-title">🏢 Selecionar Setor</div>
       <div class="setor-grid" id="setor-grid">
-        <div class="setor-grp">MASHA ADM</div>
-        <button class="setor-btn" onclick="selSetor(this,'MASHA ADM COZINHA')">MASHA ADM<br>COZINHA</button>
-        <button class="setor-btn" onclick="selSetor(this,'MASHA ADM BAR')">MASHA ADM<br>BAR</button>
-        <button class="setor-btn" onclick="selSetor(this,'MASHA ADM LIMPEZA')">MASHA ADM<br>LIMPEZA</button>
-        <div class="setor-grp">MASHA PIER</div>
-        <button class="setor-btn" onclick="selSetor(this,'MASHA PIER COZINHA')">MASHA PIER<br>COZINHA</button>
-        <button class="setor-btn" onclick="selSetor(this,'MASHA PIER BAR')">MASHA PIER<br>BAR</button>
-        <button class="setor-btn" onclick="selSetor(this,'MASHA PIER LIMPEZA')">MASHA PIER<br>LIMPEZA</button>
-        <div class="setor-grp">LINHAS DE PRODUÇÃO</div>
-        <button class="setor-btn" onclick="selSetor(this,'RESF &amp; HORT')">RESF &amp; HORT</button>
-        <button class="setor-btn" onclick="selSetor(this,'CONGELADA')">CONGELADA</button>
-        <button class="setor-btn" onclick="selSetor(this,'BROILER E FBCO')">BROILER E FBCO</button>
-        <button class="setor-btn" onclick="selSetor(this,'BOQUETA')">BOQUETA</button>
-        <button class="setor-btn" onclick="selSetor(this,'ESTOQUE SECO')">ESTOQUE SECO</button>
-        <div class="setor-grp">ESTOQUE</div>
-        <button class="setor-btn span2" onclick="selSetor(this,'ESTOQUE BAR')">ESTOQUE BAR</button><button class="setor-btn span2" onclick="selSetor(this,'CALI CAFÉ')">CALI CAFÉ</button><button class="setor-btn span2" onclick="selSetor(this,'ENXOVAL')">ENXOVAL</button>
+        <button class="setor-btn span2" onclick="selSetor(this,'MASHA ADM')">MASHA ADM</button>
+        <button class="setor-btn span2" onclick="selSetor(this,'MASHA PIER')">MASHA PIER</button>
+        <button class="setor-btn span2" onclick="selSetor(this,'LINHA COZINHA &amp; BAR')">LINHA COZINHA &amp; BAR</button>
+        <button class="setor-btn span2" onclick="selSetor(this,'CALI CAFÉ')">CALI CAFÉ</button>
+        <button class="setor-btn span2" onclick="selSetor(this,'ENXOVAL')">ENXOVAL</button>
       </div>
     </div>
 
@@ -399,10 +390,7 @@ if('serviceWorker' in navigator){
       <input type="date" id="f-data" onchange="loadAdmin()">
       <select id="f-setor" onchange="loadAdmin()">
         <option value="">Todos os setores</option>
-<option>MASHA ADM COZINHA</option><option>MASHA ADM BAR</option><option>MASHA ADM LIMPEZA</option>
-<option>MASHA PIER COZINHA</option><option>MASHA PIER BAR</option><option>MASHA PIER LIMPEZA</option>
-<option>RESF &amp; HORT</option><option>CONGELADA</option><option>BROILER E FBCO</option><option>BOQUETA</option><option>ESTOQUE SECO</option>
-<option>ESTOQUE BAR</option><option>CALI CAFÉ</option><option>ENXOVAL</option></select>
+<option>MASHA ADM</option><option>MASHA PIER</option><option>LINHA COZINHA &amp; BAR</option><option>CALI CAFÉ</option><option>ENXOVAL</option></select>
     </div>
     <div id="admin-list"></div>
     <div style="margin-top:16px">
@@ -3869,9 +3857,13 @@ async function loadAdmin(){
       window._adminKeys[i]=e._k;
       window._adminEntries[i]=e;
       const isEnviado = e.status==='enviado';
+      const temUpload = !!(e.allfood_upload && e.allfood_upload.base64);
       const actionBtn = isEnviado
         ? `<button class="btn-sm btn-view" onclick="openEntry(${i})" title="Visualizar">👁️ Visualizar</button>`
         : `<button class="btn-sm btn-resume" onclick="openEntry(${i})" title="Retomar contagem">↩️ Retomar</button>`;
+      const allfoodBtn = temUpload
+        ? `<button class="btn-sm btn-dl" onclick="downloadAllfood(${i})" title="Baixar planilha anexada">⬇️</button>`
+        : `<button class="btn-sm btn-dl off" onclick="downloadAllfood(${i})" title="Nenhuma planilha anexada">⬇️</button>`;
       return `
       <div class="cnt-card">
         <div class="cnt-info">
@@ -3884,7 +3876,7 @@ async function loadAdmin(){
             ${isEnviado?'✅ Enviado':'⏳ Rascunho'}</span>
           ${actionBtn}
           <button class="btn-sm" onclick="exportEntry(window._adminKeys[${i}])">Excel</button>
-          <button class="btn-sm btn-dl" onclick="downloadAllfood(${i})" title="Download Allfood">⬇️</button>
+          ${allfoodBtn}
           <button class="btn-del" onclick="confirmDelete(window._adminKeys[${i}])" title="Excluir">🗑️</button>
         </div>
       </div>`;
@@ -3929,65 +3921,28 @@ async function downloadAllfood(idx){
   try{
     const snap=await db.ref('/inventario/'+key+'/allfood_upload').get();
 
-    if(snap.exists() && snap.val().base64){
-      const up=snap.val();
-
-      // Reconstruct exact original file from base64
-      const binary=atob(up.base64);
-      const bytes=new Uint8Array(binary.length);
-      for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
-      const blob=new Blob([bytes],{type:'application/octet-stream'});
-
-      // Download with original filename
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');
-      a.href=url; a.download=up.filename||'planilha.xlsx';
-      document.body.appendChild(a); a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      showToast('✅ Download: '+up.filename);
-
-    } else {
-      // Fallback: generate from counted items
-      const snap2=await db.ref('/inventario/'+key).get();
-      if(!snap2.exists()){showToast('Nenhum dado encontrado.');return;}
-      const e=snap2.val();
-      const it=e.itens||{};
-      const now=new Date();
-      const dtStr=now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR');
-      const dataFmt=e.data?new Date(e.data+'T12:00:00').toLocaleDateString('pt-BR'):e.data;
-      const blueStyle={font:{bold:true,sz:11,name:'Calibri',color:{rgb:'FF020000'}},fill:{patternType:'solid',fgColor:{rgb:'99CCFF'}},border:{top:{style:'thin'},bottom:{style:'thin'}}};
-      const dfStyle={font:{sz:11,name:'Calibri'}};
-      const wsData=[
-        ['Relatório:','Lista para contagem','','','',''],
-        ['Emissão:',dtStr,'','','',''],
-        ['Empresa:','CALI CRAVINGS BAR E GRILL','','','',''],
-        ['','','','','',''],
-        ['Setor:',e.setor,'Data:',dataFmt,'Colaborador:',e.colaborador],
-        ['Classe:','TODAS','','','',''],['Sub-Classe:','TODAS','','','',''],
-        ['','','','','',''],['','','','','',''],
-        ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE']
-      ];
-      let n=0;
-      PRODUCTS.forEach(p=>{
-        const q=it[p.cod];
-        if(q!=null&&parseFloat(q)>0){
-          const m=ALLFOOD_META[p.cod]||['',''];
-          wsData.push([parseInt(p.cod)||p.cod,p.desc,p.unit,m[0],m[1],parseFloat(q)]);n++;
-        }
-      });
-      wsData.push(['','','','','','']);
-      wsData.push(['Total de itens: ',n,'','','','']);
-      const wb=XLSX.utils.book_new();
-      const ws=XLSX.utils.aoa_to_sheet(wsData);
-      ws['!cols']=[{wch:12},{wch:48},{wch:8},{wch:20},{wch:22},{wch:12}];
-      const rng=XLSX.utils.decode_range(ws['!ref']);
-      for(let c=rng.s.c;c<=rng.e.c;c++){const h=XLSX.utils.encode_cell({r:9,c});if(ws[h])ws[h].s=blueStyle;for(let r=10;r<=rng.e.r;r++){const d=XLSX.utils.encode_cell({r,c});if(ws[d])ws[d].s=dfStyle;}}
-      XLSX.utils.book_append_sheet(wb,ws,'Allfood');
-      XLSX.writeFile(wb,'Allfood_'+e.setor.replace(/[\s&]/g,'_')+'_'+e.data+'.xlsx');
-      showToast('✅ Download gerado a partir da contagem.');
+    if(!snap.exists() || !snap.val().base64){
+      showToast('⚠️ Nenhuma planilha foi anexada nesta contagem.',4000);
+      return;
     }
+
+    const up=snap.val();
+
+    // Reconstrói o arquivo original exato a partir do base64
+    const binary=atob(up.base64);
+    const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+    const blob=new Blob([bytes],{type:'application/octet-stream'});
+
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=up.filename||'planilha.xlsx';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('✅ Download: '+up.filename);
+
   }catch(err){
     showToast('❌ Erro: '+err.message);
     console.error(err);
