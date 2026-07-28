@@ -259,6 +259,34 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
   padding:11px 15px;font-size:13px;font-weight:600;color:#1a5c36;
   text-align:center;margin-bottom:10px;}
 
+/* ─── GERENCIAL (edição/desativação de produtos) ── */
+.ger-toolbar{background:var(--verde-esc);padding:9px 14px;display:flex;gap:8px;
+  align-items:center;position:sticky;top:64px;z-index:90;flex-wrap:wrap;}
+.ger-toolbar select{padding:9px 11px;border-radius:8px;border:none;font-size:12px;
+  font-family:'DM Sans',sans-serif;background:rgba(255,255,255,.92);color:var(--verde);}
+.ger-row{display:flex;flex-wrap:wrap;align-items:flex-end;padding:11px 14px;gap:8px;
+  border-bottom:1px solid #f0ede8;transition:background .15s;}
+.ger-row:last-child{border-bottom:none;}
+.ger-row.inativo{background:#fbeaea;}
+.ger-cod{font-size:10px;color:var(--muted);min-width:48px;padding-bottom:7px;}
+.ger-field{display:flex;flex-direction:column;gap:2px;}
+.ger-field label{font-size:8.5px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.3px;}
+.ger-inp{padding:6px 8px;border:1.5px solid var(--borda);border-radius:7px;
+  font-size:12.5px;font-family:'DM Sans',sans-serif;background:var(--areia);
+  outline:none;transition:all .18s;}
+.ger-inp:focus{border-color:var(--verde);background:var(--branco);}
+.ger-desc{flex:1;min-width:170px;}
+.ger-desc input{width:100%;}
+.ger-small input{width:66px;}
+.ger-mid input{width:130px;}
+.ger-toggle-wrap{display:flex;align-items:center;gap:5px;font-size:10.5px;
+  font-weight:700;color:var(--muted);padding-bottom:7px;white-space:nowrap;}
+.btn-ger-save{padding:8px 13px;border-radius:7px;border:1.5px solid var(--verde);
+  background:var(--verde);color:var(--areia);font-size:11.5px;font-weight:700;
+  cursor:pointer;white-space:nowrap;transition:background .14s;}
+.btn-ger-save:hover{background:var(--verde-clar);}
+
 .gone{display:none!important;}
 </style>
 <meta name="mobile-web-app-capable" content="yes">
@@ -347,6 +375,7 @@ if('serviceWorker' in navigator){
 
     <button class="btn-go" id="btn-start" onclick="startInventory(this.dataset.forceNew==='true')" disabled>Iniciar Contagem →</button>
     <button class="btn-ver-cont" onclick="verContagens()">&#128203; Ver Contagens Finalizadas</button>
+    <button class="btn-ver-cont" onclick="confirmGerencial()">&#128295; Gerenciar Produtos</button>
     <p class="login-hint">Rascunhos são salvos automaticamente. Você pode continuar depois.</p>
   </div>
 </div>
@@ -399,6 +428,26 @@ if('serviceWorker' in navigator){
   </div>
 </div>
 
+<!-- GERENCIAL (edição/desativação de produtos) -->
+<div id="screen-gerencial" class="screen">
+  <div class="ger-toolbar">
+    <input type="text" class="search-inp" id="ger-search-inp"
+      placeholder="🔍  Buscar produto ou código..."
+      oninput="filterProdsGer(this.value)">
+    <select id="ger-status-filter" onchange="buildGerList()">
+      <option value="">Todos</option>
+      <option value="ativo">Somente ativos</option>
+      <option value="inativo">Somente inativos</option>
+    </select>
+  </div>
+  <div class="inv-body" id="ger-inv-body">
+    <div id="ger-list"></div>
+  </div>
+  <div class="action-bar">
+    <button class="btn-out" onclick="showScreen('login')">← Sair</button>
+  </div>
+</div>
+
 <!-- MODAL EXCLUIR -->
 <div class="overlay" id="overlay-del">
   <div class="modal">
@@ -413,6 +462,24 @@ if('serviceWorker' in navigator){
     <div class="modal-btns" style="margin-top:16px">
       <button class="btn-out" onclick="closeDelModal()">Cancelar</button>
       <button class="btn-go" style="background:#e05252;border-color:#e05252" onclick="doDelete()">Excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ACESSO GERENCIAL -->
+<div class="overlay" id="overlay-ger">
+  <div class="modal">
+    <h3>Acesso Gerencial</h3>
+    <p>Digite a senha gerencial para editar ou desativar produtos.</p>
+    <div class="fld">
+      <label>Senha</label>
+      <input type="password" id="ger-senha" placeholder="..." autocomplete="off"
+        onkeydown="if(event.key==='Enter') doGerAccess()">
+    </div>
+    <p id="ger-erro" style="color:#e05252;font-size:12px;margin-top:6px;display:none">Senha incorreta.</p>
+    <div class="modal-btns" style="margin-top:16px">
+      <button class="btn-out" onclick="closeGerModal()">Cancelar</button>
+      <button class="btn-go" onclick="doGerAccess()">Entrar</button>
     </div>
   </div>
 </div>
@@ -3346,6 +3413,41 @@ const ALLFOOD_META={
   "2177":["BEBIDAS","DESTILADOS"]
 };
 
+/* ── OVERRIDES DE PRODUTOS (edição gerencial) ──
+   Camada dinâmica salva no Firebase em /produto_overrides/{cod}.
+   Aplica desc/unit/cat/classe/subclasse/ativo por cima da lista fixa
+   acima, sem precisar reimplantar o site a cada edição. ───────── */
+let PRODUTOS_INATIVOS = new Set();
+
+async function loadOverrides(){
+  try{
+    const snap = await db.ref('/produto_overrides').get();
+    if(snap.exists()){
+      const data = snap.val();
+      Object.keys(data).forEach(cod=>{
+        const o = data[cod];
+        const p = PRODUCTS.find(x=>x.cod===cod);
+        if(p){
+          if(o.desc!=null && o.desc!=='') p.desc=o.desc;
+          if(o.unit!=null && o.unit!=='') p.unit=o.unit;
+          if(o.cat!=null && o.cat!=='') p.cat=o.cat;
+        }
+        if(o.classe!=null || o.subclasse!=null){
+          ALLFOOD_META[cod]=[o.classe||'', o.subclasse||''];
+        }
+        if(o.ativo===false) PRODUTOS_INATIVOS.add(cod);
+        else PRODUTOS_INATIVOS.delete(cod);
+      });
+    }
+  }catch(e){ console.warn('Overrides de produtos:', e.message); }
+}
+const overridesPromise = loadOverrides();
+
+function visibleProducts(){
+  const base = PRODUCTS.filter(p=>!PRODUTOS_INATIVOS.has(p.cod));
+  return (setor==='ENXOVAL') ? base.filter(p=>p.cat==='ENXOVAL') : base.filter(p=>p.cat!=='ENXOVAL');
+}
+
 /* ── STATE ──────────────────────────────────── */
 let nome='',data='',setor='',saved={},savedPorc={},submitted=false,saving=false;
 
@@ -3442,6 +3544,7 @@ async function startInventory(forceNew){
     }
   }catch(e){console.warn('Draft:',e.message);}
 
+  await overridesPromise;
   showScreen('inventory');
   buildList();
   updImportBtn();
@@ -3474,7 +3577,7 @@ function buildList(){
   
   // Build category map
   _cats={};
-  (setor==='ENXOVAL'?PRODUCTS.filter(p=>p.cat==='ENXOVAL'):PRODUCTS.filter(p=>p.cat!=='ENXOVAL')).forEach(p=>{if(!_cats[p.cat])_cats[p.cat]=[];_cats[p.cat].push(p);});
+  visibleProducts().forEach(p=>{if(!_cats[p.cat])_cats[p.cat]=[];_cats[p.cat].push(p);});
   _catKeys=Object.keys(_cats).sort();
   
   // Render async to avoid freezing UI
@@ -3592,7 +3695,7 @@ function onPorc(cod,el){
 // togCat defined in buildList
 
 function updProg(){
-const _list=(setor==='ENXOVAL'?PRODUCTS.filter(p=>p.cat==='ENXOVAL'):PRODUCTS.filter(p=>p.cat!=='ENXOVAL'));
+const _list=visibleProducts();
 const fil=Object.keys(saved).length;
 document.getElementById('prog-fill').style.width=(fil/_list.length*100)+'%';
 document.getElementById('prog-txt').textContent=fil+' / '+_list.length+' itens';
@@ -3600,7 +3703,7 @@ document.getElementById('prog-txt').textContent=fil+' / '+_list.length+' itens';
 
 function updBadges(){
 const cats={};
-(setor==='ENXOVAL'?PRODUCTS.filter(p=>p.cat==='ENXOVAL'):PRODUCTS.filter(p=>p.cat!=='ENXOVAL')).forEach(p=>{if(!cats[p.cat])cats[p.cat]=[];cats[p.cat].push(p);});
+visibleProducts().forEach(p=>{if(!cats[p.cat])cats[p.cat]=[];cats[p.cat].push(p);});
   Object.keys(cats).sort().forEach((cat,i)=>{
     const fil=cats[cat].filter(p=>saved[p.cod]!=null).length;
     const b=document.getElementById('bdg'+i);
@@ -3901,11 +4004,10 @@ async function openEntry(idx){
   document.getElementById('btn-admin').classList.remove('gone');
   document.getElementById('btn-nova').classList.remove('gone');
 
+  await overridesPromise;
   showScreen('inventory');
   buildList();
   updImportBtn();
-
-  document.getElementById('sub-banner').classList.toggle('gone', !submitted);
   document.getElementById('btn-enviar').disabled = submitted;
   document.getElementById('btn-enviar').textContent = submitted ? '✅ Já Enviado' : '✅ Enviar Contagem';
   document.getElementById('btn-gravar').disabled = submitted;
@@ -4099,6 +4201,179 @@ function goToAdmin(){
     showScreen('admin');
   }
 }
+
+/* ── GERENCIAL (edição/desativação de produtos) ──── */
+function confirmGerencial(){
+  document.getElementById('ger-senha').value='';
+  document.getElementById('ger-erro').style.display='none';
+  document.getElementById('overlay-ger').classList.add('on');
+  setTimeout(()=>document.getElementById('ger-senha').focus(),100);
+}
+function closeGerModal(){
+  document.getElementById('overlay-ger').classList.remove('on');
+}
+async function doGerAccess(){
+  const pw=document.getElementById('ger-senha').value;
+  if(pw!=='000813'){
+    document.getElementById('ger-erro').style.display='block';
+    document.getElementById('ger-senha').value='';return;
+  }
+  closeGerModal();
+  await overridesPromise;
+  showScreen('gerencial');
+  buildGerList();
+}
+
+let _gerCats={};
+let _gerCatKeys=[];
+
+function buildGerList(){
+  const con=document.getElementById('ger-list');
+  con.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">⏳ Carregando produtos...</div>';
+
+  const statusF=document.getElementById('ger-status-filter').value;
+  let list=PRODUCTS;
+  if(statusF==='ativo')   list=list.filter(p=>!PRODUTOS_INATIVOS.has(p.cod));
+  if(statusF==='inativo') list=list.filter(p=>PRODUTOS_INATIVOS.has(p.cod));
+
+  _gerCats={};
+  list.forEach(p=>{if(!_gerCats[p.cat])_gerCats[p.cat]=[];_gerCats[p.cat].push(p);});
+  _gerCatKeys=Object.keys(_gerCats).sort();
+
+  setTimeout(()=>{
+    con.innerHTML='';
+    _gerCatKeys.forEach((cat,i)=>{
+      const items=_gerCats[cat];
+      const inat=items.filter(p=>PRODUTOS_INATIVOS.has(p.cod)).length;
+      const sec=document.createElement('div');
+      sec.className='cat-sec';
+      sec.id='gcat'+i;
+      sec.dataset.rendered='false';
+      sec.innerHTML=`
+        <div class="cat-hdr" onclick="togCatGer(${i})">
+          <div class="cat-left">
+            <span class="cat-lbl">${catEmoji(cat)} ${cat}</span>
+            <span class="cat-badge${inat?' lit':''}">${items.length}${inat?' · '+inat+' inativo(s)':''}</span>
+          </div>
+          <svg class="cat-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="cat-body" id="gbody${i}"></div>`;
+      con.appendChild(sec);
+    });
+  }, 50);
+}
+
+function togCatGer(i){
+  const sec=document.getElementById('gcat'+i);
+  const body=document.getElementById('gbody'+i);
+  if(!sec.classList.contains('open') && sec.dataset.rendered==='false'){
+    const cat=_gerCatKeys[i];
+    body.innerHTML=_gerCats[cat].map(p=>gerRow(p)).join('');
+    sec.dataset.rendered='true';
+  }
+  sec.classList.toggle('open');
+}
+
+function escAttr(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+}
+
+function gerRow(p){
+  const inativo=PRODUTOS_INATIVOS.has(p.cod);
+  const meta=ALLFOOD_META[p.cod]||['',''];
+  return `
+    <div class="ger-row${inativo?' inativo':''}" id="grow${p.cod}">
+      <span class="ger-cod">Cód.<br>${p.cod}</span>
+      <div class="ger-field ger-desc">
+        <label>Descrição</label>
+        <input type="text" class="ger-inp" id="gdesc${p.cod}" value="${escAttr(p.desc)}">
+      </div>
+      <div class="ger-field ger-small">
+        <label>Unidade</label>
+        <input type="text" class="ger-inp" id="gunit${p.cod}" value="${escAttr(p.unit)}">
+      </div>
+      <div class="ger-field ger-mid">
+        <label>Categoria</label>
+        <input type="text" class="ger-inp" id="gcat${p.cod}" value="${escAttr(p.cat)}">
+      </div>
+      <div class="ger-field ger-mid">
+        <label>Classe (Allfood)</label>
+        <input type="text" class="ger-inp" id="gclasse${p.cod}" value="${escAttr(meta[0])}">
+      </div>
+      <div class="ger-field ger-mid">
+        <label>Sub-Classe (Allfood)</label>
+        <input type="text" class="ger-inp" id="gsub${p.cod}" value="${escAttr(meta[1])}">
+      </div>
+      <label class="ger-toggle-wrap">
+        <input type="checkbox" id="gativo${p.cod}" ${inativo?'':'checked'}>
+        Ativo
+      </label>
+      <button class="btn-ger-save" onclick="salvarProdutoGer('${p.cod}')">💾 Salvar</button>
+    </div>`;
+}
+
+function filterProdsGer(q){
+  q=q.toLowerCase().trim();
+  if(!q){
+    document.querySelectorAll('#ger-list .cat-sec').forEach(s=>s.style.display='');
+    document.querySelectorAll('#ger-list .ger-row').forEach(r=>r.style.display='');
+    return;
+  }
+  _gerCatKeys.forEach((cat,i)=>{
+    const sec=document.getElementById('gcat'+i);
+    const body=document.getElementById('gbody'+i);
+    if(sec && sec.dataset.rendered==='false'){
+      body.innerHTML=_gerCats[cat].map(p=>gerRow(p)).join('');
+      sec.dataset.rendered='true';
+    }
+  });
+  document.querySelectorAll('#ger-list .ger-row').forEach(r=>{
+    const desc=r.querySelector('.ger-desc input').value.toLowerCase();
+    const cod=r.querySelector('.ger-cod').textContent.toLowerCase();
+    r.style.display=(!q||desc.includes(q)||cod.includes(q))?'':'none';
+  });
+  document.querySelectorAll('#ger-list .cat-sec').forEach(s=>{
+    const vis=[...s.querySelectorAll('.ger-row')].some(r=>r.style.display!=='none');
+    s.style.display=vis?'':'none';
+    if(vis) s.classList.add('open');
+  });
+}
+
+async function salvarProdutoGer(cod){
+  const desc=document.getElementById('gdesc'+cod).value.trim();
+  const unit=document.getElementById('gunit'+cod).value.trim();
+  const cat=document.getElementById('gcat'+cod).value.trim();
+  const classe=document.getElementById('gclasse'+cod).value.trim();
+  const subclasse=document.getElementById('gsub'+cod).value.trim();
+  const ativo=document.getElementById('gativo'+cod).checked;
+
+  if(!desc||!unit||!cat){
+    showToast('⚠️ Descrição, Unidade e Categoria são obrigatórios.');
+    return;
+  }
+
+  try{
+    await db.ref('/produto_overrides/'+cod).set({
+      desc,unit,cat,classe,subclasse,ativo,
+      editadoEm:Date.now()
+    });
+
+    const p=PRODUCTS.find(x=>x.cod===cod);
+    if(p){p.desc=desc;p.unit=unit;p.cat=cat;}
+    ALLFOOD_META[cod]=[classe,subclasse];
+    if(ativo) PRODUTOS_INATIVOS.delete(cod); else PRODUTOS_INATIVOS.add(cod);
+
+    const row=document.getElementById('grow'+cod);
+    if(row) row.classList.toggle('inativo', !ativo);
+
+    showToast('✅ Produto '+cod+' atualizado!');
+  }catch(err){
+    showToast('❌ Erro ao salvar: '+err.message);
+    console.error(err);
+  }
+}
+
 /* ── UTILS ───────────────────────────────────── */
 function ptDate(s){if(!s)return'';const[y,m,d]=s.split('-');return d+'/'+m+'/'+y;}
 let _tt;
