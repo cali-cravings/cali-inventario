@@ -118,6 +118,11 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
   transition:all .15s;display:flex;align-items:center;gap:4px;}
 .btn-import:hover{background:#ffffff;}
 #import-file-input{display:none;}
+.btn-ger-novo{padding:8px 11px;white-space:nowrap;background:var(--areia);
+  border:none;border-radius:8px;color:var(--verde);
+  font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;
+  transition:all .15s;}
+.btn-ger-novo:hover{background:#ffffff;}
 
 /* ─── INV BODY ── */
 .inv-body{padding:11px 14px 120px;}
@@ -439,12 +444,54 @@ if('serviceWorker' in navigator){
       <option value="ativo">Somente ativos</option>
       <option value="inativo">Somente inativos</option>
     </select>
+    <button class="btn-ger-novo" onclick="abrirNovoProduto()">➕ Novo Produto</button>
   </div>
   <div class="inv-body" id="ger-inv-body">
     <div id="ger-list"></div>
   </div>
   <div class="action-bar">
     <button class="btn-out" onclick="showScreen('login')">← Sair</button>
+  </div>
+</div>
+
+<!-- MODAL NOVO PRODUTO -->
+<div class="overlay" id="overlay-novo-produto">
+  <div class="modal">
+    <h3>Novo Produto</h3>
+    <p>Cadastre um produto novo. Ele fica disponível pra contagem em todos os aparelhos assim que salvar.</p>
+    <div class="fld">
+      <label>Código (único)</label>
+      <input type="text" id="np-cod" placeholder="Ex: 2000" autocomplete="off">
+    </div>
+    <div class="fld">
+      <label>Descrição</label>
+      <input type="text" id="np-desc" placeholder="Nome do produto" autocomplete="off">
+    </div>
+    <div class="row2">
+      <div class="fld">
+        <label>Unidade</label>
+        <input type="text" id="np-unit" placeholder="UN, KG..." autocomplete="off">
+      </div>
+      <div class="fld">
+        <label>Categoria</label>
+        <input type="text" id="np-cat" placeholder="Ex: BEBIDAS NÃO ALCOÓLICAS" autocomplete="off">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="fld">
+        <label>Classe (Allfood)</label>
+        <input type="text" id="np-classe" placeholder="Opcional" autocomplete="off">
+      </div>
+      <div class="fld">
+        <label>Sub-Classe (Allfood)</label>
+        <input type="text" id="np-sub" placeholder="Opcional" autocomplete="off">
+      </div>
+    </div>
+    <p id="np-erro" style="color:#e05252;font-size:12px;margin-top:6px;display:none"></p>
+    <div class="modal-btns" style="margin-top:16px">
+      <button class="btn-out" onclick="fecharNovoProduto()">Cancelar</button>
+      <button class="btn-go" onclick="salvarNovoProduto()">Salvar</button>
+    </div>
   </div>
 </div>
 
@@ -3454,6 +3501,18 @@ let PRODUTOS_INATIVOS = new Set();
 
 async function loadOverrides(){
   try{
+    // Produtos criados pela tela Gerencial (não fazem parte da lista fixa
+    // do código-fonte) — precisam entrar na lista base ANTES dos overrides.
+    const extrasSnap = await db.ref('/produtos_extras').get();
+    if(extrasSnap.exists()){
+      const extras = extrasSnap.val();
+      Object.keys(extras).forEach(cod=>{
+        if(!PRODUCTS.find(x=>x.cod===cod)){
+          const e = extras[cod];
+          PRODUCTS.push({cod, desc:e.desc||'', unit:e.unit||'UN', cat:e.cat||'OUTROS'});
+        }
+      });
+    }
     const snap = await db.ref('/produto_overrides').get();
     if(snap.exists()){
       const data = snap.val();
@@ -3712,6 +3771,12 @@ function onQty(cod,el){
   const hasQty=saved[cod]!=null, hasPorc=savedPorc[cod]!=null;
   document.getElementById('row'+cod).classList.toggle('lit', hasQty||hasPorc);
   updProg();updBadges();
+  // Assim que o colaborador começa a digitar a quantidade, limpa a busca
+  // para deixar a caixa pronta pro próximo produto.
+  const searchInp=document.getElementById('search-inp');
+  if(searchInp && searchInp.value!==''){
+    searchInp.value='';
+  }
 }
 
 function onPorc(cod,el){
@@ -4317,7 +4382,10 @@ function gerRow(p){
   const meta=ALLFOOD_META[p.cod]||['',''];
   return `
     <div class="ger-row${inativo?' inativo':''}" id="grow${p.cod}">
-      <span class="ger-cod">Cód.<br>${p.cod}</span>
+      <div class="ger-field ger-small ger-codfield">
+        <label>Código</label>
+        <input type="text" class="ger-inp" id="gcod${p.cod}" value="${escAttr(p.cod)}">
+      </div>
       <div class="ger-field ger-desc">
         <label>Descrição</label>
         <input type="text" class="ger-inp" id="gdesc${p.cod}" value="${escAttr(p.desc)}">
@@ -4363,7 +4431,7 @@ function filterProdsGer(q){
   });
   document.querySelectorAll('#ger-list .ger-row').forEach(r=>{
     const desc=r.querySelector('.ger-desc input').value.toLowerCase();
-    const cod=r.querySelector('.ger-cod').textContent.toLowerCase();
+    const cod=(r.querySelector('.ger-codfield input')?.value||'').toLowerCase();
     r.style.display=(!q||desc.includes(q)||cod.includes(q))?'':'none';
   });
   document.querySelectorAll('#ger-list .cat-sec').forEach(s=>{
@@ -4374,6 +4442,7 @@ function filterProdsGer(q){
 }
 
 async function salvarProdutoGer(cod){
+  const novoCod=document.getElementById('gcod'+cod).value.trim();
   const desc=document.getElementById('gdesc'+cod).value.trim();
   const unit=document.getElementById('gunit'+cod).value.trim();
   const cat=document.getElementById('gcat'+cod).value.trim();
@@ -4381,8 +4450,40 @@ async function salvarProdutoGer(cod){
   const subclasse=document.getElementById('gsub'+cod).value.trim();
   const ativo=document.getElementById('gativo'+cod).checked;
 
-  if(!desc||!unit||!cat){
-    showToast('⚠️ Descrição, Unidade e Categoria são obrigatórios.');
+  if(!novoCod||!desc||!unit||!cat){
+    showToast('⚠️ Código, Descrição, Unidade e Categoria são obrigatórios.');
+    return;
+  }
+
+  // ── Mudança de código ────────────────────────────────
+  // Trocar o código de um produto existente não é seguro fazer "no lugar":
+  // contagens já enviadas referenciam o código antigo. Por isso, mudar o
+  // código cria um produto novo com os dados atuais e desativa o código
+  // antigo (mantendo o histórico intacto).
+  if(novoCod!==cod){
+    const conflito=PRODUCTS.find(x=>x.cod===novoCod);
+    if(conflito){
+      showToast('❌ Já existe um produto com o código '+novoCod+'.');
+      return;
+    }
+    if(!confirm('Trocar o código '+cod+' para '+novoCod+'?\n\nO código '+cod+' será desativado (histórico preservado) e '+novoCod+' passa a ser o código ativo deste produto.')) return;
+
+    try{
+      await db.ref('/produtos_extras/'+novoCod).set({cod:novoCod,desc,unit,cat,criadoEm:Date.now(),migradoDe:cod});
+      await db.ref('/produto_overrides/'+novoCod).set({desc,unit,cat,classe,subclasse,ativo:true,editadoEm:Date.now()});
+      await db.ref('/produto_overrides/'+cod).set({desc,unit,cat,classe,subclasse,ativo:false,migradoPara:novoCod,editadoEm:Date.now()});
+
+      if(!PRODUCTS.find(x=>x.cod===novoCod)) PRODUCTS.push({cod:novoCod,desc,unit,cat});
+      ALLFOOD_META[novoCod]=[classe,subclasse];
+      PRODUTOS_INATIVOS.add(cod);
+      PRODUTOS_INATIVOS.delete(novoCod);
+
+      showToast('✅ Código atualizado: '+cod+' → '+novoCod);
+      buildGerList();
+    }catch(err){
+      showToast('❌ Erro ao trocar código: '+err.message);
+      console.error(err);
+    }
     return;
   }
 
@@ -4403,6 +4504,56 @@ async function salvarProdutoGer(cod){
     showToast('✅ Produto '+cod+' atualizado!');
   }catch(err){
     showToast('❌ Erro ao salvar: '+err.message);
+    console.error(err);
+  }
+}
+
+/* ── NOVO PRODUTO ─────────────────────────────── */
+function abrirNovoProduto(){
+  ['np-cod','np-desc','np-unit','np-cat','np-classe','np-sub'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('np-erro').style.display='none';
+  document.getElementById('overlay-novo-produto').classList.add('on');
+  setTimeout(()=>document.getElementById('np-cod').focus(),100);
+}
+function fecharNovoProduto(){
+  document.getElementById('overlay-novo-produto').classList.remove('on');
+}
+async function salvarNovoProduto(){
+  const cod=document.getElementById('np-cod').value.trim();
+  const desc=document.getElementById('np-desc').value.trim();
+  const unit=document.getElementById('np-unit').value.trim()||'UN';
+  const cat=document.getElementById('np-cat').value.trim();
+  const classe=document.getElementById('np-classe').value.trim();
+  const subclasse=document.getElementById('np-sub').value.trim();
+  const erro=document.getElementById('np-erro');
+  erro.style.display='none';
+
+  if(!cod||!desc||!cat){
+    erro.textContent='Código, Descrição e Categoria são obrigatórios.';
+    erro.style.display='block';
+    return;
+  }
+  if(PRODUCTS.find(x=>x.cod===cod)){
+    erro.textContent='Já existe um produto com o código '+cod+'.';
+    erro.style.display='block';
+    return;
+  }
+
+  try{
+    await db.ref('/produtos_extras/'+cod).set({cod,desc,unit,cat,criadoEm:Date.now()});
+    if(classe||subclasse){
+      await db.ref('/produto_overrides/'+cod).set({desc,unit,cat,classe,subclasse,ativo:true,editadoEm:Date.now()});
+    }
+
+    PRODUCTS.push({cod,desc,unit,cat});
+    if(classe||subclasse) ALLFOOD_META[cod]=[classe,subclasse];
+
+    fecharNovoProduto();
+    showToast('✅ Produto '+cod+' cadastrado!');
+    buildGerList();
+  }catch(err){
+    erro.textContent='Erro ao salvar: '+err.message;
+    erro.style.display='block';
     console.error(err);
   }
 }
