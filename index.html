@@ -471,6 +471,7 @@ if('serviceWorker' in navigator){
   </div>
   <div class="action-bar">
     <button class="btn-out" onclick="showScreen('login')">← Sair</button>
+    <button class="btn-send" id="btn-salvar-todos" onclick="salvarTodosProdutosGer()">💾 Salvar Todos</button>
   </div>
 </div>
 
@@ -4543,7 +4544,9 @@ function filterProdsGer(q){
   });
 }
 
-async function salvarProdutoGer(cod){
+async function salvarProdutoGer(cod, opts){
+  opts=opts||{};
+  const silent=!!opts.silent;
   const novoCod=document.getElementById('gcod'+cod).value.trim();
   const desc=document.getElementById('gdesc'+cod).value.trim();
   const unit=document.getElementById('gunit'+cod).value.trim();
@@ -4553,6 +4556,7 @@ async function salvarProdutoGer(cod){
   const ativo=document.getElementById('gativo'+cod).checked;
 
   if(!novoCod||!desc||!unit||!cat){
+    if(silent) throw new Error('Código, Descrição, Unidade e Categoria são obrigatórios (produto '+cod+').');
     showToast('⚠️ Código, Descrição, Unidade e Categoria são obrigatórios.');
     return;
   }
@@ -4565,10 +4569,13 @@ async function salvarProdutoGer(cod){
   if(novoCod!==cod){
     const conflito=PRODUCTS.find(x=>x.cod===novoCod);
     if(conflito){
+      if(silent) throw new Error('Já existe um produto com o código '+novoCod+'.');
       showToast('❌ Já existe um produto com o código '+novoCod+'.');
       return;
     }
-    if(!confirm('Trocar o código '+cod+' para '+novoCod+'?\n\nO código '+cod+' será desativado (histórico preservado) e '+novoCod+' passa a ser o código ativo deste produto.')) return;
+    // Em salvamento em lote não perguntamos um por um — a confirmação
+    // já foi dada uma vez no início do "Salvar Todos".
+    if(!silent && !confirm('Trocar o código '+cod+' para '+novoCod+'?\n\nO código '+cod+' será desativado (histórico preservado) e '+novoCod+' passa a ser o código ativo deste produto.')) return;
 
     try{
       await db.ref('/produtos_extras/'+novoCod).set({cod:novoCod,desc,unit,cat,criadoEm:Date.now(),migradoDe:cod});
@@ -4580,11 +4587,11 @@ async function salvarProdutoGer(cod){
       PRODUTOS_INATIVOS.add(cod);
       PRODUTOS_INATIVOS.delete(novoCod);
 
-      showToast('✅ Código atualizado: '+cod+' → '+novoCod);
-      buildGerList();
+      if(!silent){showToast('✅ Código atualizado: '+cod+' → '+novoCod);buildGerList();}
     }catch(err){
-      showToast('❌ Erro ao trocar código: '+err.message);
       console.error(err);
+      if(silent) throw err;
+      showToast('❌ Erro ao trocar código: '+err.message);
     }
     return;
   }
@@ -4603,11 +4610,89 @@ async function salvarProdutoGer(cod){
     const row=document.getElementById('grow'+cod);
     if(row) row.classList.toggle('inativo', !ativo);
 
-    showToast('✅ Produto '+cod+' atualizado!');
+    if(!silent) showToast('✅ Produto '+cod+' atualizado!');
   }catch(err){
-    showToast('❌ Erro ao salvar: '+err.message);
     console.error(err);
+    if(silent) throw err;
+    showToast('❌ Erro ao salvar: '+err.message);
   }
+}
+
+/* ── SALVAR TODOS (lote) ──────────────────────── */
+async function salvarTodosProdutosGer(){
+  const btn=document.getElementById('btn-salvar-todos');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Preparando...';}
+
+  // Garante que TODA a lista (inclusive categorias ainda não abertas)
+  // esteja renderizada antes de salvar, senão o que nunca foi aberto
+  // fica de fora do lote.
+  _gerCatKeys.forEach((cat,i)=>{
+    const sec=document.getElementById('gcat'+i);
+    const body=document.getElementById('gbody'+i);
+    if(sec && sec.dataset.rendered==='false'){
+      body.innerHTML=_gerCats[cat].map(p=>gerRow(p)).join('');
+      sec.dataset.rendered='true';
+    }
+  });
+
+  const rows=[...document.querySelectorAll('#ger-list .ger-row')];
+  if(!rows.length){
+    if(btn){btn.disabled=false;btn.textContent='💾 Salvar Todos';}
+    showToast('⚠️ Nenhum produto na lista pra salvar.');
+    return;
+  }
+  if(!confirm('Salvar as alterações de '+rows.length+' produto(s) (lista completa com o filtro atual)?')){
+    if(btn){btn.disabled=false;btn.textContent='💾 Salvar Todos';}
+    return;
+  }
+
+  if(btn){btn.textContent='⏳ Salvando...';}
+
+  // Só grava no Firebase quem realmente mudou em relação ao estado atual —
+  // evita reescrever os ~1.700 produtos toda vez que alguém clica em
+  // "Salvar Todos" sem ter mexido na maioria deles.
+  let ok=0, erros=0, semAlteracao=0;
+  for(const row of rows){
+    const origCod=row.id.replace('grow','');
+    if(!produtoGerMudou(origCod)){ semAlteracao++; continue; }
+    try{
+      await salvarProdutoGer(origCod,{silent:true});
+      ok++;
+    }catch(err){
+      erros++;
+      console.error('Erro ao salvar produto '+origCod+':', err);
+    }
+  }
+
+  if(btn){btn.disabled=false;btn.textContent='💾 Salvar Todos';}
+  buildGerList();
+  if(!ok && !erros){showToast('Nada pra salvar — nenhuma alteração encontrada nos '+rows.length+' produtos carregados.');return;}
+  showToast(erros
+    ? '⚠️ '+ok+' salvos, '+erros+' com erro (veja o console).'
+    : '✅ '+ok+' produto(s) salvos com sucesso!'+(semAlteracao?' ('+semAlteracao+' sem alteração)':''));
+}
+
+function produtoGerMudou(cod){
+  const gcodEl=document.getElementById('gcod'+cod);
+  if(!gcodEl) return false;
+  const novoCod=gcodEl.value.trim();
+  if(novoCod!==cod) return true; // mudança de código sempre conta
+
+  const p=PRODUCTS.find(x=>x.cod===cod);
+  if(!p) return true;
+
+  const desc=document.getElementById('gdesc'+cod).value.trim();
+  const unit=document.getElementById('gunit'+cod).value.trim();
+  const cat=document.getElementById('gcat'+cod).value.trim();
+  const classe=document.getElementById('gclasse'+cod).value.trim();
+  const subclasse=document.getElementById('gsub'+cod).value.trim();
+  const ativo=document.getElementById('gativo'+cod).checked;
+  const meta=ALLFOOD_META[cod]||['',''];
+  const inativoAtual=PRODUTOS_INATIVOS.has(cod);
+
+  return desc!==p.desc || unit!==p.unit || cat!==p.cat ||
+         classe!==(meta[0]||'') || subclasse!==(meta[1]||'') ||
+         ativo===inativoAtual; // ativo(checkbox) deve ser o oposto de "está inativo"
 }
 
 /* ── NOVO PRODUTO ─────────────────────────────── */
