@@ -508,6 +508,10 @@ if('serviceWorker' in navigator){
         <input type="text" id="np-sub" placeholder="Opcional" autocomplete="off">
       </div>
     </div>
+    <label class="ger-toggle-wrap" style="margin-top:4px">
+      <input type="checkbox" id="np-porcao">
+      Usa caixa de Porção (além da quantidade)
+    </label>
     <p id="np-erro" style="color:#e05252;font-size:12px;margin-top:6px;display:none"></p>
     <div class="modal-btns" style="margin-top:16px">
       <button class="btn-out" onclick="fecharNovoProduto()">Cancelar</button>
@@ -3519,6 +3523,16 @@ const ALLFOOD_META={
    Aplica desc/unit/cat/classe/subclasse/ativo por cima da lista fixa
    acima, sem precisar reimplantar o site a cada edição. ───────── */
 let PRODUTOS_INATIVOS = new Set();
+// Por padrão a caixa de "Porções" só aparece pra categoria PREPARADOS DE
+// COZINHA. Esse mapa guarda exceções definidas manualmente na tela
+// Gerencial (produto a produto), que têm prioridade sobre a regra da
+// categoria — pra mais ou pra menos.
+let PORCAO_OVERRIDE = new Map();
+function produtoUsaPorcao(cod){
+  if(PORCAO_OVERRIDE.has(cod)) return PORCAO_OVERRIDE.get(cod);
+  const p=PRODUCTS.find(x=>x.cod===cod);
+  return !!(p && p.cat==='PREPARADOS DE COZINHA');
+}
 
 async function loadOverrides(){
   try{
@@ -3550,6 +3564,7 @@ async function loadOverrides(){
         }
         if(o.ativo===false) PRODUTOS_INATIVOS.add(cod);
         else PRODUTOS_INATIVOS.delete(cod);
+        if(o.porcao===true || o.porcao===false) PORCAO_OVERRIDE.set(cod, o.porcao);
       });
     }
   }catch(e){ console.warn('Overrides de produtos:', e.message); }
@@ -3742,7 +3757,7 @@ function togCat(i){
 function pRow(p){
   const v=saved[p.cod]!=null?saved[p.cod]:'';
   const ro=submitted?'readonly':'';
-  const isPrep = p.cat==='PREPARADOS DE COZINHA';
+  const isPrep = produtoUsaPorcao(p.cod);
   if(isPrep){
     const vp=savedPorc[p.cod]!=null?savedPorc[p.cod]:'';
     return `
@@ -4448,7 +4463,12 @@ function buildGerList(){
       const inat=items.filter(p=>PRODUTOS_INATIVOS.has(p.cod)).length;
       const sec=document.createElement('div');
       sec.className='cat-sec';
-      sec.id='gcat'+i;
+      // Prefixo "gcatsec"/"gcatbody" (não "gcat"/"gbody") de propósito:
+      // o campo "Categoria" de cada produto usa id="gcat"+código, e como
+      // muitos códigos são números baixos (1, 3, 5...) eles colidiam com
+      // o id desta seção (id="gcat"+índice), fazendo o app ler a seção
+      // inteira no lugar do campo de texto e travar o salvamento.
+      sec.id='gcatsec'+i;
       sec.dataset.rendered='false';
       sec.innerHTML=`
         <div class="cat-hdr" onclick="togCatGer(${i})">
@@ -4459,15 +4479,15 @@ function buildGerList(){
           <svg class="cat-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        <div class="cat-body" id="gbody${i}"></div>`;
+        <div class="cat-body" id="gcatbody${i}"></div>`;
       con.appendChild(sec);
     });
   }, 50);
 }
 
 function togCatGer(i){
-  const sec=document.getElementById('gcat'+i);
-  const body=document.getElementById('gbody'+i);
+  const sec=document.getElementById('gcatsec'+i);
+  const body=document.getElementById('gcatbody'+i);
   if(!sec.classList.contains('open') && sec.dataset.rendered==='false'){
     const cat=_gerCatKeys[i];
     body.innerHTML=_gerCats[cat].map(p=>gerRow(p)).join('');
@@ -4510,6 +4530,10 @@ function gerRow(p){
         <input type="text" class="ger-inp" id="gsub${p.cod}" value="${escAttr(meta[1])}">
       </div>
       <label class="ger-toggle-wrap">
+        <input type="checkbox" id="gporc${p.cod}" ${produtoUsaPorcao(p.cod)?'checked':''}>
+        Usa Porção
+      </label>
+      <label class="ger-toggle-wrap">
         <input type="checkbox" id="gativo${p.cod}" ${inativo?'':'checked'}>
         Ativo
       </label>
@@ -4525,8 +4549,8 @@ function filterProdsGer(q){
     return;
   }
   _gerCatKeys.forEach((cat,i)=>{
-    const sec=document.getElementById('gcat'+i);
-    const body=document.getElementById('gbody'+i);
+    const sec=document.getElementById('gcatsec'+i);
+    const body=document.getElementById('gcatbody'+i);
     if(sec && sec.dataset.rendered==='false'){
       body.innerHTML=_gerCats[cat].map(p=>gerRow(p)).join('');
       sec.dataset.rendered='true';
@@ -4554,6 +4578,7 @@ async function salvarProdutoGer(cod, opts){
   const classe=document.getElementById('gclasse'+cod).value.trim();
   const subclasse=document.getElementById('gsub'+cod).value.trim();
   const ativo=document.getElementById('gativo'+cod).checked;
+  const porcao=document.getElementById('gporc'+cod).checked;
 
   if(!novoCod||!desc||!unit||!cat){
     if(silent) throw new Error('Código, Descrição, Unidade e Categoria são obrigatórios (produto '+cod+').');
@@ -4579,13 +4604,15 @@ async function salvarProdutoGer(cod, opts){
 
     try{
       await db.ref('/produtos_extras/'+novoCod).set({cod:novoCod,desc,unit,cat,criadoEm:Date.now(),migradoDe:cod});
-      await db.ref('/produto_overrides/'+novoCod).set({desc,unit,cat,classe,subclasse,ativo:true,editadoEm:Date.now()});
-      await db.ref('/produto_overrides/'+cod).set({desc,unit,cat,classe,subclasse,ativo:false,migradoPara:novoCod,editadoEm:Date.now()});
+      await db.ref('/produto_overrides/'+novoCod).set({desc,unit,cat,classe,subclasse,ativo:true,porcao,editadoEm:Date.now()});
+      await db.ref('/produto_overrides/'+cod).set({desc,unit,cat,classe,subclasse,ativo:false,porcao,migradoPara:novoCod,editadoEm:Date.now()});
 
       if(!PRODUCTS.find(x=>x.cod===novoCod)) PRODUCTS.push({cod:novoCod,desc,unit,cat});
       ALLFOOD_META[novoCod]=[classe,subclasse];
       PRODUTOS_INATIVOS.add(cod);
       PRODUTOS_INATIVOS.delete(novoCod);
+      PORCAO_OVERRIDE.set(novoCod, porcao);
+      PORCAO_OVERRIDE.set(cod, porcao);
 
       if(!silent){showToast('✅ Código atualizado: '+cod+' → '+novoCod);buildGerList();}
     }catch(err){
@@ -4598,7 +4625,7 @@ async function salvarProdutoGer(cod, opts){
 
   try{
     await db.ref('/produto_overrides/'+cod).set({
-      desc,unit,cat,classe,subclasse,ativo,
+      desc,unit,cat,classe,subclasse,ativo,porcao,
       editadoEm:Date.now()
     });
 
@@ -4606,6 +4633,7 @@ async function salvarProdutoGer(cod, opts){
     if(p){p.desc=desc;p.unit=unit;p.cat=cat;}
     ALLFOOD_META[cod]=[classe,subclasse];
     if(ativo) PRODUTOS_INATIVOS.delete(cod); else PRODUTOS_INATIVOS.add(cod);
+    PORCAO_OVERRIDE.set(cod, porcao);
 
     const row=document.getElementById('grow'+cod);
     if(row) row.classList.toggle('inativo', !ativo);
@@ -4626,14 +4654,14 @@ async function renderizarTodasCategoriasGer(onProgress){
   const pendentes=_gerCatKeys
     .map((cat,i)=>i)
     .filter(i=>{
-      const sec=document.getElementById('gcat'+i);
+      const sec=document.getElementById('gcatsec'+i);
       return sec && sec.dataset.rendered==='false';
     });
   for(let idx=0; idx<pendentes.length; idx++){
     const i=pendentes[idx];
     const cat=_gerCatKeys[i];
-    const sec=document.getElementById('gcat'+i);
-    const body=document.getElementById('gbody'+i);
+    const sec=document.getElementById('gcatsec'+i);
+    const body=document.getElementById('gcatbody'+i);
     if(sec && body && sec.dataset.rendered==='false'){
       body.innerHTML=_gerCats[cat].map(p=>gerRow(p)).join('');
       sec.dataset.rendered='true';
@@ -4662,13 +4690,25 @@ async function salvarTodosProdutosGer(){
       return;
     }
 
+    // Alguns códigos aparecem duplicados no catálogo (ex: itens do Cali
+    // Café — ver diagnóstico). Como duas linhas usam o mesmo código, o
+    // navegador não consegue distinguir os campos de uma da outra e o
+    // "Salvar Todos" acabaria lendo/gravando a linha errada. Por
+    // segurança, esses ficam de fora do lote até os códigos serem
+    // corrigidos (use "Editar código" pra dar um código único a cada um).
+    const contagemCod={};
+    PRODUCTS.forEach(p=>{contagemCod[p.cod]=(contagemCod[p.cod]||0)+1;});
+    const codsDuplicados=new Set(Object.keys(contagemCod).filter(c=>contagemCod[c]>1));
+
     // Descobre o que REALMENTE foi editado — a pergunta e o salvamento
     // consideram só isso, nunca a lista inteira. Um erro num produto não
     // derruba a checagem dos demais.
     btn.textContent='⏳ Verificando alterações...';
     const codsAlterados=[];
+    let ignoradosDuplicados=0;
     for(const row of rows){
       const cod=row.id.replace('grow','');
+      if(codsDuplicados.has(cod)){ ignoradosDuplicados++; continue; }
       try{
         if(produtoGerMudou(cod)) codsAlterados.push(cod);
       }catch(err){
@@ -4677,11 +4717,16 @@ async function salvarTodosProdutosGer(){
     }
 
     if(!codsAlterados.length){
-      showToast('Nada pra salvar — nenhuma edição encontrada.');
+      showToast(ignoradosDuplicados
+        ? 'Nada pra salvar. ('+ignoradosDuplicados+' linha(s) com código duplicado foram ignoradas — corrija os códigos primeiro.)'
+        : 'Nada pra salvar — nenhuma edição encontrada.');
       return;
     }
 
-    if(!confirm('Salvar as alterações de '+codsAlterados.length+' produto(s) editado(s)?')) return;
+    const avisoDuplicado=ignoradosDuplicados
+      ? '\n\n⚠️ '+ignoradosDuplicados+' linha(s) com código duplicado foram ignoradas por segurança.'
+      : '';
+    if(!confirm('Salvar as alterações de '+codsAlterados.length+' produto(s) editado(s)?'+avisoDuplicado)) return;
 
     // Só grava no Firebase quem realmente mudou — o resto da lista
     // (os outros produtos) não é tocado.
@@ -4726,17 +4771,20 @@ function produtoGerMudou(cod){
   const classe=document.getElementById('gclasse'+cod).value.trim();
   const subclasse=document.getElementById('gsub'+cod).value.trim();
   const ativo=document.getElementById('gativo'+cod).checked;
+  const porcao=document.getElementById('gporc'+cod).checked;
   const meta=ALLFOOD_META[cod]||['',''];
   const inativoAtual=PRODUTOS_INATIVOS.has(cod);
 
   return desc!==p.desc || unit!==p.unit || cat!==p.cat ||
          classe!==(meta[0]||'') || subclasse!==(meta[1]||'') ||
-         ativo===inativoAtual; // ativo(checkbox) deve ser o oposto de "está inativo"
+         ativo===inativoAtual || // ativo(checkbox) deve ser o oposto de "está inativo"
+         porcao!==produtoUsaPorcao(cod);
 }
 
 /* ── NOVO PRODUTO ─────────────────────────────── */
 function abrirNovoProduto(){
   ['np-cod','np-desc','np-unit','np-cat','np-classe','np-sub'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('np-porcao').checked=false;
   document.getElementById('np-erro').style.display='none';
   document.getElementById('overlay-novo-produto').classList.add('on');
   setTimeout(()=>document.getElementById('np-cod').focus(),100);
@@ -4751,6 +4799,7 @@ async function salvarNovoProduto(){
   const cat=document.getElementById('np-cat').value.trim();
   const classe=document.getElementById('np-classe').value.trim();
   const subclasse=document.getElementById('np-sub').value.trim();
+  const porcao=document.getElementById('np-porcao').checked;
   const erro=document.getElementById('np-erro');
   erro.style.display='none';
 
@@ -4767,8 +4816,12 @@ async function salvarNovoProduto(){
 
   try{
     await db.ref('/produtos_extras/'+cod).set({cod,desc,unit,cat,criadoEm:Date.now()});
-    if(classe||subclasse){
-      await db.ref('/produto_overrides/'+cod).set({desc,unit,cat,classe,subclasse,ativo:true,editadoEm:Date.now()});
+    // Só grava overrides se tiver algo diferente do padrão pra registrar
+    // (evita criar registros vazios desnecessários no Firebase).
+    const usaPorcaoPadrao = cat==='PREPARADOS DE COZINHA';
+    if(classe||subclasse||porcao!==usaPorcaoPadrao){
+      await db.ref('/produto_overrides/'+cod).set({desc,unit,cat,classe,subclasse,ativo:true,porcao,editadoEm:Date.now()});
+      PORCAO_OVERRIDE.set(cod, porcao);
     }
 
     PRODUCTS.push({cod,desc,unit,cat});
