@@ -40,6 +40,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--areia);color:var(--texto)
   display:none;align-items:center;justify-content:space-between;
   font-size:11px;border-bottom:1px solid rgba(255,255,255,.08);}
 .hdr-session.on{display:flex;}
+.offline-banner{display:none;position:sticky;top:0;z-index:99;background:#e05252;
+  color:#fff;font-size:11.5px;font-weight:600;text-align:center;padding:7px 12px;
+  line-height:1.4;}
+.offline-banner.on{display:block;}
 .hdr-setor-txt{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60vw;}
 .hdr-date-txt{opacity:.7;white-space:nowrap;font-size:10px;flex-shrink:0;margin-left:8px;}
 .hdr-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
@@ -344,6 +348,10 @@ if('serviceWorker' in navigator){
 <div class="hdr-session" id="hdr-session">
   <span class="hdr-setor-txt" id="hdr-setor"></span>
   <span class="hdr-date-txt" id="hdr-date"></span>
+</div>
+
+<div class="offline-banner" id="offline-banner">
+  📡 Sem internet — sua contagem continua sendo salva neste aparelho. Não feche a página; procure um local com sinal pra sincronizar.
 </div>
 
 <!-- LOGIN -->
@@ -3579,6 +3587,52 @@ function visibleProducts(){
 /* ── STATE ──────────────────────────────────── */
 let nome='',data='',setor='',saved={},savedPorc={},submitted=false,saving=false;
 
+/* ── CONEXÃO / BACKUP LOCAL ──────────────────────
+   O Firebase, quando está sem internet, NÃO dá erro — ele fica esperando
+   pra sempre, e o botão "Gravar" fica preso em "Salvando..." sem nunca
+   confirmar nem falhar. Foi o que aconteceu na contagem do estacionamento.
+   Por isso: (1) avisamos antes de tentar, se já sabemos que está offline;
+   (2) toda gravação tem um limite de tempo, pra nunca ficar travada; e
+   (3) guardamos uma cópia da contagem neste aparelho o tempo todo, então
+   mesmo se a internet falhar e a página for atualizada, os itens contados
+   não se perdem. ────────────────────────────────── */
+function atualizarBannerConexao(){
+  const b=document.getElementById('offline-banner');
+  if(!b) return;
+  b.classList.toggle('on', !navigator.onLine);
+}
+window.addEventListener('online', atualizarBannerConexao);
+window.addEventListener('offline', atualizarBannerConexao);
+
+function comTimeout(promise, ms){
+  return Promise.race([
+    promise,
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), ms))
+  ]);
+}
+
+function chaveBackupLocal(){
+  return 'cali_backup_'+fbKey();
+}
+function salvarBackupLocal(){
+  if(!nome||!data||!setor) return;
+  try{
+    localStorage.setItem(chaveBackupLocal(), JSON.stringify({
+      nome, data, setor, itens:saved, porcoes:savedPorc,
+      salvoEm:Date.now()
+    }));
+  }catch(e){ console.warn('Backup local falhou:', e.message); }
+}
+function lerBackupLocal(){
+  try{
+    const raw=localStorage.getItem(chaveBackupLocal());
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+function limparBackupLocal(){
+  try{ localStorage.removeItem(chaveBackupLocal()); }catch(e){}
+}
+
 /* ── INIT ───────────────────────────────────── */
 function selSetor(btn, s){
   document.querySelectorAll('.setor-btn').forEach(x=>x.classList.remove('sel'));
@@ -3593,6 +3647,16 @@ document.addEventListener('DOMContentLoaded',()=>{
     d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   document.getElementById('inp-nome').addEventListener('input',valLogin);
   document.getElementById('inp-data').addEventListener('change',valLogin);
+  atualizarBannerConexao();
+});
+
+// Se tiver contagem em andamento não enviada, avisa antes de fechar/atualizar
+// a página sem querer — outra rede de segurança contra perda de dados.
+window.addEventListener('beforeunload',(e)=>{
+  if(!submitted && Object.keys(saved||{}).length>0){
+    e.preventDefault();
+    e.returnValue='';
+  }
 });
 
 function valLogin(){
@@ -3673,6 +3737,25 @@ async function startInventory(forceNew){
       if(snap.exists()){const v=snap.val();saved=v.itens||{};savedPorc=v.porcoes||{};submitted=v.status==='enviado';}
     }
   }catch(e){console.warn('Draft:',e.message);}
+
+  // Se tiver uma contagem salva NESTE APARELHO que não chegou a sincronizar
+  // com o Firebase (por falta de internet, por exemplo), oferece restaurar
+  // por cima do que veio do servidor — é essa a rede de segurança pro que
+  // aconteceu na contagem do estacionamento.
+  if(!submitted){
+    const backup=lerBackupLocal();
+    if(backup){
+      const itensBackup=Object.keys(backup.itens||{}).length;
+      const itensServidor=Object.keys(saved).length;
+      if(itensBackup>itensServidor){
+        const quando=new Date(backup.salvoEm).toLocaleString('pt-BR');
+        if(confirm('Encontramos uma contagem salva neste aparelho ('+itensBackup+' itens, de '+quando+') que não chegou a sincronizar com o servidor.\n\nRestaurar esses itens agora?')){
+          saved=Object.assign({}, saved, backup.itens);
+          savedPorc=Object.assign({}, savedPorc, backup.porcoes||{});
+        }
+      }
+    }
+  }
 
   await overridesPromise;
   showScreen('inventory');
@@ -3809,6 +3892,7 @@ function onQty(cod,el){
   const hasQty=saved[cod]!=null, hasPorc=savedPorc[cod]!=null;
   document.getElementById('row'+cod).classList.toggle('lit', hasQty||hasPorc);
   updProg();updBadges();
+  salvarBackupLocal();
   // Assim que o colaborador começa a digitar a quantidade, limpa a busca
   // para deixar a caixa pronta pro próximo produto.
   const searchInp=document.getElementById('search-inp');
@@ -3826,6 +3910,7 @@ function onPorc(cod,el){
   }
   const hasQty=saved[cod]!=null, hasPorc=savedPorc[cod]!=null;
   document.getElementById('row'+cod).classList.toggle('lit', hasQty||hasPorc);
+  salvarBackupLocal();
 }
 
 // togCat defined in buildList
@@ -3893,16 +3978,34 @@ function filterProds(q){
 /* ── SAVE ────────────────────────────────────── */
 async function saveProgress(){
   if(saving||submitted)return;
+
+  // Backup local ANTES de qualquer tentativa de rede — garante que os
+  // itens contados não se percam mesmo que a gravação falhe ou trave.
+  salvarBackupLocal();
+
+  if(!navigator.onLine){
+    atualizarBannerConexao();
+    alert('⚠️ Você está sem internet.\n\nProcure um local com rede pra sincronizar sua contagem. Enquanto isso, NÃO feche nem atualize esta página — seus itens continuam salvos neste aparelho.');
+    return;
+  }
+
   saving=true;
   const btn=document.getElementById('btn-gravar');
   btn.textContent='⏳ Salvando...';
   try{
-    await db.ref('/inventario/'+fbKey()).update({
+    await comTimeout(db.ref('/inventario/'+fbKey()).update({
       colaborador:nome,data,setor,status:'andamento',
       timestamp:Date.now(),itens:saved,porcoes:savedPorc
-    });
+    }), 12000);
     showToast('✅ Rascunho salvo!');
-  }catch{showToast('❌ Falha na conexão.');}
+  }catch(err){
+    if(err && err.message==='timeout'){
+      atualizarBannerConexao();
+      alert('⚠️ Sem resposta do servidor — provavelmente sem internet.\n\nProcure um local com rede pra sincronizar. Seus itens continuam salvos neste aparelho, não feche a página.');
+    }else{
+      showToast('❌ Falha na conexão. Seus itens continuam salvos neste aparelho.');
+    }
+  }
   finally{saving=false;btn.textContent='💾 Gravar';}
 }
 
@@ -3912,18 +4015,34 @@ function closeModal(){document.getElementById('overlay').classList.remove('on');
 
 async function submitInventory(){
   closeModal();
+  salvarBackupLocal(); // segurança: guarda antes de tentar enviar
+
+  if(!navigator.onLine){
+    atualizarBannerConexao();
+    alert('⚠️ Você está sem internet.\n\nNão dá pra enviar a contagem agora. Procure um local com rede e tente "Enviar" de novo — seus itens continuam salvos neste aparelho.');
+    return;
+  }
+
   try{
-    await db.ref('/inventario/'+fbKey()).update({
+    await comTimeout(db.ref('/inventario/'+fbKey()).update({
       colaborador:nome,data,setor,status:'enviado',
       timestamp:Date.now(),tsEnvio:Date.now(),itens:saved,porcoes:savedPorc
-    });
+    }), 12000);
     submitted=true;
+    limparBackupLocal(); // enviado com sucesso, não precisa mais do backup
     document.getElementById('btn-enviar').disabled=true;
     document.getElementById('btn-enviar').textContent='✅ Enviado!';
     document.getElementById('sub-banner').classList.remove('gone');
     document.querySelectorAll('.qty-inp').forEach(i=>i.readOnly=true);
     showToast('🎉 Contagem enviada com sucesso!',4000);
-  }catch{showToast('❌ Erro ao enviar. Tente novamente.');}
+  }catch(err){
+    if(err && err.message==='timeout'){
+      atualizarBannerConexao();
+      alert('⚠️ Sem resposta do servidor — provavelmente sem internet.\n\nSeus itens continuam salvos neste aparelho. Procure um local com rede e tente "Enviar" de novo.');
+    }else{
+      showToast('❌ Erro ao enviar. Seus itens continuam salvos neste aparelho — tente novamente.');
+    }
+  }
 }
 
 /* ── EXPORT SETOR ────────────────────────────── */
