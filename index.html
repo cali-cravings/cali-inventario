@@ -4619,66 +4619,96 @@ async function salvarProdutoGer(cod, opts){
 }
 
 /* ── SALVAR TODOS (lote) ──────────────────────── */
-async function salvarTodosProdutosGer(){
-  const btn=document.getElementById('btn-salvar-todos');
-  if(btn){btn.disabled=true;btn.textContent='⏳ Preparando...';}
-
-  // Garante que TODA a lista (inclusive categorias ainda não abertas)
-  // esteja renderizada antes de salvar, senão o que nunca foi aberto
-  // fica de fora do lote.
-  _gerCatKeys.forEach((cat,i)=>{
+// Renderiza as categorias que ainda não foram abertas, uma por vez,
+// liberando a thread principal entre elas (requestAnimationFrame) pra
+// não travar a tela quando a lista tem milhares de produtos.
+async function renderizarTodasCategoriasGer(onProgress){
+  const pendentes=_gerCatKeys
+    .map((cat,i)=>i)
+    .filter(i=>{
+      const sec=document.getElementById('gcat'+i);
+      return sec && sec.dataset.rendered==='false';
+    });
+  for(let idx=0; idx<pendentes.length; idx++){
+    const i=pendentes[idx];
+    const cat=_gerCatKeys[i];
     const sec=document.getElementById('gcat'+i);
     const body=document.getElementById('gbody'+i);
-    if(sec && sec.dataset.rendered==='false'){
+    if(sec && body && sec.dataset.rendered==='false'){
       body.innerHTML=_gerCats[cat].map(p=>gerRow(p)).join('');
       sec.dataset.rendered='true';
     }
-  });
-
-  const rows=[...document.querySelectorAll('#ger-list .ger-row')];
-  if(!rows.length){
-    if(btn){btn.disabled=false;btn.textContent='💾 Salvar Todos';}
-    showToast('⚠️ Nenhum produto na lista pra salvar.');
-    return;
+    if(onProgress) onProgress(idx+1, pendentes.length);
+    await new Promise(r=>requestAnimationFrame(r));
   }
+}
 
-  // Primeiro descobre o que REALMENTE foi editado — a pergunta e o
-  // salvamento consideram só isso, nunca a lista inteira.
-  const codsAlterados=rows
-    .map(row=>row.id.replace('grow',''))
-    .filter(cod=>produtoGerMudou(cod));
+async function salvarTodosProdutosGer(){
+  const btn=document.getElementById('btn-salvar-todos');
+  if(!btn || btn.disabled) return; // evita clique duplo enquanto já está rodando
+  btn.disabled=true;
+  btn.textContent='⏳ Preparando...';
 
-  if(!codsAlterados.length){
-    if(btn){btn.disabled=false;btn.textContent='💾 Salvar Todos';}
-    showToast('Nada pra salvar — nenhuma edição encontrada.');
-    return;
-  }
+  try{
+    // Garante que TODA a lista (inclusive categorias ainda não abertas)
+    // esteja renderizada antes de checar o que mudou — sem travar a tela.
+    await renderizarTodasCategoriasGer((feito,total)=>{
+      if(total>0) btn.textContent='⏳ Preparando ('+feito+'/'+total+')...';
+    });
 
-  if(!confirm('Salvar as alterações de '+codsAlterados.length+' produto(s) editado(s)?')){
-    if(btn){btn.disabled=false;btn.textContent='💾 Salvar Todos';}
-    return;
-  }
-
-  if(btn){btn.textContent='⏳ Salvando...';}
-
-  // Só grava no Firebase quem realmente mudou — o resto da lista (os
-  // outros ~1.700 produtos) não é tocado.
-  let ok=0, erros=0;
-  for(const cod of codsAlterados){
-    try{
-      await salvarProdutoGer(cod,{silent:true});
-      ok++;
-    }catch(err){
-      erros++;
-      console.error('Erro ao salvar produto '+cod+':', err);
+    const rows=[...document.querySelectorAll('#ger-list .ger-row')];
+    if(!rows.length){
+      showToast('⚠️ Nenhum produto na lista pra salvar.');
+      return;
     }
-  }
 
-  if(btn){btn.disabled=false;btn.textContent='💾 Salvar Todos';}
-  buildGerList();
-  showToast(erros
-    ? '⚠️ '+ok+' salvos, '+erros+' com erro (veja o console).'
-    : '✅ '+ok+' produto(s) salvos com sucesso!');
+    // Descobre o que REALMENTE foi editado — a pergunta e o salvamento
+    // consideram só isso, nunca a lista inteira. Um erro num produto não
+    // derruba a checagem dos demais.
+    btn.textContent='⏳ Verificando alterações...';
+    const codsAlterados=[];
+    for(const row of rows){
+      const cod=row.id.replace('grow','');
+      try{
+        if(produtoGerMudou(cod)) codsAlterados.push(cod);
+      }catch(err){
+        console.error('Erro ao checar produto '+cod+':', err);
+      }
+    }
+
+    if(!codsAlterados.length){
+      showToast('Nada pra salvar — nenhuma edição encontrada.');
+      return;
+    }
+
+    if(!confirm('Salvar as alterações de '+codsAlterados.length+' produto(s) editado(s)?')) return;
+
+    // Só grava no Firebase quem realmente mudou — o resto da lista
+    // (os outros produtos) não é tocado.
+    let ok=0, erros=0;
+    for(let i=0;i<codsAlterados.length;i++){
+      const cod=codsAlterados[i];
+      btn.textContent='⏳ Salvando ('+(i+1)+'/'+codsAlterados.length+')...';
+      try{
+        await salvarProdutoGer(cod,{silent:true});
+        ok++;
+      }catch(err){
+        erros++;
+        console.error('Erro ao salvar produto '+cod+':', err);
+      }
+    }
+
+    buildGerList();
+    showToast(erros
+      ? '⚠️ '+ok+' salvos, '+erros+' com erro (veja o console).'
+      : '✅ '+ok+' produto(s) salvos com sucesso!');
+  }catch(err){
+    console.error('Falha no Salvar Todos:', err);
+    showToast('❌ Erro inesperado: '+err.message+' — nada foi perdido, tente de novo.');
+  }finally{
+    btn.disabled=false;
+    btn.textContent='💾 Salvar Todos';
+  }
 }
 
 function produtoGerMudou(cod){
