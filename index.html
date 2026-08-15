@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
@@ -102,6 +103,15 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
 .btn-go:hover{background:var(--verde-clar);}
 .btn-go:active{transform:scale(.98);}
 .btn-go:disabled{opacity:.45;cursor:not-allowed;}
+.btn-google{width:100%;padding:11px 13px;background:#fff;color:#3c4043;
+  border:1.5px solid #dadce0;border-radius:10px;font-family:'DM Sans',sans-serif;
+  font-size:14.5px;font-weight:600;cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;gap:10px;letter-spacing:.1px;
+  box-shadow:0 1px 3px rgba(60,64,67,.12);}
+.btn-google:hover{background:#f8f9fa;box-shadow:0 1px 4px rgba(60,64,67,.2);}
+.btn-google:active{transform:scale(.98);}
+.btn-google:disabled{opacity:.55;cursor:not-allowed;}
+.btn-google-icon{flex-shrink:0;}
 
 /* ─── TOOLBAR ── */
 .toolbar{background:var(--verde-esc);padding:9px 14px;display:flex;gap:8px;
@@ -373,32 +383,57 @@ if('serviceWorker' in navigator){
       <p>Sistema de Contagem de Estoque</p>
     </div>
 
-    <div class="card">
-      <div class="card-title">📋 Identificação</div>
-      <div class="row2">
-        <div class="fld">
-          <label>Seu Nome</label>
-          <input type="text" id="inp-nome" placeholder="Nome completo" autocomplete="off">
+    <div class="card" id="google-login-card">
+      <div class="card-title">🔐 Identificação</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Entre com sua conta Google autorizada pra começar a contagem.</p>
+      <button class="btn-google" id="btn-google-login" onclick="entrarComGoogle()" disabled>
+        <svg class="btn-google-icon" viewBox="0 0 48 48" width="20" height="20" aria-hidden="true">
+          <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12
+            c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24
+            c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+          <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039
+            l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
+          <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36
+            c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
+          <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571
+            c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24
+            C44,22.659,43.862,21.35,43.611,20.083z"/>
+        </svg>
+        <span id="btn-google-text">Verificando login...</span>
+      </button>
+      <p id="google-login-erro" style="color:#e05252;font-size:12px;margin-top:8px;display:none"></p>
+    </div>
+
+    <div id="login-form-area" style="display:none">
+      <div class="card">
+        <div class="card-title">📋 Identificação</div>
+        <div class="fld" style="margin-bottom:12px">
+          <label>Identificado como</label>
+          <div style="display:flex;align-items:center;justify-content:space-between;background:var(--areia-med);border-radius:8px;padding:9px 12px;">
+            <span id="google-user-nome" style="font-size:13px;font-weight:700;color:var(--verde)"></span>
+            <button type="button" onclick="sairDoGoogle()" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;flex-shrink:0">Trocar conta</button>
+          </div>
         </div>
         <div class="fld">
           <label>Data da Contagem</label>
           <input type="date" id="inp-data">
         </div>
       </div>
-    </div>
 
-    <div class="card">
-      <div class="card-title">🏢 Selecionar Setor</div>
-      <div class="setor-grid" id="setor-grid">
-        <button class="setor-btn span2" onclick="selSetor(this,'MASHA ADM')">MASHA ADM</button>
-        <button class="setor-btn span2" onclick="selSetor(this,'MASHA PIER')">MASHA PIER</button>
-        <button class="setor-btn span2" onclick="selSetor(this,'LINHA COZINHA &amp; BAR')">LINHA COZINHA &amp; BAR</button>
-        <button class="setor-btn span2" onclick="selSetor(this,'CALI CAFÉ')">CALI CAFÉ</button>
-        <button class="setor-btn span2" onclick="selSetor(this,'ENXOVAL')">ENXOVAL</button>
+      <div class="card">
+        <div class="card-title">🏢 Selecionar Setor</div>
+        <div class="setor-grid" id="setor-grid">
+          <button class="setor-btn span2" onclick="selSetor(this,'MASHA ADM')">MASHA ADM</button>
+          <button class="setor-btn span2" onclick="selSetor(this,'MASHA PIER')">MASHA PIER</button>
+          <button class="setor-btn span2" onclick="selSetor(this,'LINHA COZINHA &amp; BAR')">LINHA COZINHA &amp; BAR</button>
+          <button class="setor-btn span2" onclick="selSetor(this,'CALI CAFÉ')">CALI CAFÉ</button>
+          <button class="setor-btn span2" onclick="selSetor(this,'ENXOVAL')">ENXOVAL</button>
+        </div>
       </div>
+
+      <button class="btn-go" id="btn-start" onclick="startInventory(this.dataset.forceNew==='true')" disabled>Iniciar Contagem →</button>
     </div>
 
-    <button class="btn-go" id="btn-start" onclick="startInventory(this.dataset.forceNew==='true')" disabled>Iniciar Contagem →</button>
     <button class="btn-ver-cont" onclick="verContagens()">&#128203; Ver Contagens Finalizadas</button>
     <button class="btn-ver-cont" onclick="confirmGerencial()">&#128295; Gerenciar Produtos</button>
     <p class="login-hint">Rascunhos são salvos automaticamente. Você pode continuar depois.</p>
@@ -624,6 +659,110 @@ firebase.initializeApp({
   projectId:"cozinha-pro-194a7"
 });
 const db = firebase.database();
+
+/* ── LOGIN COM GOOGLE ─────────────────────────────
+   Login não substitui a senha do Admin/Gerencial (continua 000813) —
+   serve só pra identificar o colaborador de forma confiável, no lugar de
+   digitar o nome à mão. Só e-mails cadastrados em
+   /colaboradores_autorizados no Firebase conseguem entrar; qualquer
+   outra conta Google é deslogada na hora com um aviso. ────────────── */
+const authProvider = new firebase.auth.GoogleAuthProvider();
+let googleUser = null; // {uid, email, nome}
+let _primeiraVerificacaoAuth = true;
+
+function emailKey(email){
+  return (email||'').toLowerCase().trim().replace(/\./g, ',');
+}
+function setBtnGoogleText(txt){
+  const t=document.getElementById('btn-google-text');
+  if(t) t.textContent=txt;
+}
+
+async function entrarComGoogle(){
+  const erro=document.getElementById('google-login-erro');
+  erro.style.display='none';
+  const btn=document.getElementById('btn-google-login');
+  btn.disabled=true; setBtnGoogleText('Entrando...');
+  try{
+    const result=await firebase.auth().signInWithPopup(authProvider);
+    await processarLoginGoogle(result.user);
+  }catch(err){
+    console.error('Login Google:', err);
+    if(err && err.code==='auth/popup-closed-by-user'){
+      // usuário só fechou a janela, não é erro de verdade
+    }else{
+      erro.textContent='Não foi possível entrar: '+(err.message||'tente novamente.');
+      erro.style.display='block';
+    }
+  }finally{
+    btn.disabled=false; setBtnGoogleText('Entrar com Google');
+  }
+}
+
+async function processarLoginGoogle(user){
+  const erro=document.getElementById('google-login-erro');
+  const key=emailKey(user.email);
+  try{
+    const snap=await comTimeout(db.ref('/colaboradores_autorizados/'+key).get(), 10000);
+    const autorizado = snap.exists() && snap.val()===true;
+    if(!autorizado){
+      // Bootstrap: se a lista de autorizados nunca foi criada (primeiro
+      // acesso ao app), a primeira pessoa a entrar vira autorizada
+      // automaticamente. Depois disso a lista passa a valer normalmente
+      // pra todo mundo, inclusive pra essa mesma conta.
+      const listaSnap=await comTimeout(db.ref('/colaboradores_autorizados').get(), 10000);
+      if(!listaSnap.exists()){
+        await db.ref('/colaboradores_autorizados/'+key).set(true);
+        showToast('✅ Primeiro acesso: '+user.email+' foi cadastrado como autorizado.');
+      }else{
+        await firebase.auth().signOut();
+        googleUser=null;
+        erro.textContent='O e-mail '+user.email+' não está autorizado a usar este app. Fale com o gerente pra liberar seu acesso.';
+        erro.style.display='block';
+        document.getElementById('login-form-area').style.display='none';
+        document.getElementById('google-login-card').style.display='';
+        return;
+      }
+    }
+  }catch(e){
+    erro.textContent='Não deu pra confirmar a autorização agora (sem internet?). Tente de novo quando tiver sinal.';
+    erro.style.display='block';
+    try{await firebase.auth().signOut();}catch(e2){}
+    return;
+  }
+
+  googleUser={uid:user.uid, email:user.email, nome:user.displayName||user.email};
+  nome=googleUser.nome;
+  document.getElementById('google-user-nome').textContent=googleUser.nome+' ('+googleUser.email+')';
+  document.getElementById('google-login-card').style.display='none';
+  document.getElementById('login-form-area').style.display='';
+  erro.style.display='none';
+  valLogin();
+}
+
+async function sairDoGoogle(){
+  try{await firebase.auth().signOut();}catch(e){}
+  googleUser=null; nome='';
+  document.getElementById('login-form-area').style.display='none';
+  document.getElementById('google-login-card').style.display='';
+  document.getElementById('google-login-erro').style.display='none';
+}
+
+firebase.auth().onAuthStateChanged(async (user)=>{
+  if(user){
+    await processarLoginGoogle(user);
+  }else{
+    const formArea=document.getElementById('login-form-area');
+    const loginCard=document.getElementById('google-login-card');
+    if(formArea) formArea.style.display='none';
+    if(loginCard) loginCard.style.display='';
+  }
+  if(_primeiraVerificacaoAuth){
+    _primeiraVerificacaoAuth=false;
+    const btn=document.getElementById('btn-google-login');
+    if(btn){ btn.disabled=false; setBtnGoogleText('Entrar com Google'); }
+  }
+});
 
 /* ── PRODUCT LIST (1682 itens) ───────────── */
 const PRODUCTS = [
@@ -3688,7 +3827,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   const d=new Date();
   document.getElementById('inp-data').value=
     d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  document.getElementById('inp-nome').addEventListener('input',valLogin);
   document.getElementById('inp-data').addEventListener('change',valLogin);
   atualizarBannerConexao();
 });
@@ -3703,9 +3841,8 @@ window.addEventListener('beforeunload',(e)=>{
 });
 
 function valLogin(){
-  const nm=document.getElementById('inp-nome').value.trim();
   const dt=document.getElementById('inp-data').value;
-  const ok=nm.length>1 && dt && setor;
+  const ok=!!googleUser && dt && setor;
   const btn=document.getElementById('btn-start');
   btn.disabled=!ok;
   btn.style.opacity=ok?'1':'0.45';
@@ -3726,7 +3863,6 @@ function novaContagem(){
   // reset UI
   document.querySelectorAll('.setor-btn').forEach(b=>b.classList.remove('sel'));
   setor='';
-  document.getElementById('inp-nome').value='';
   const d=new Date();
   document.getElementById('inp-data').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   document.getElementById('btn-start').disabled=true;
@@ -3754,9 +3890,9 @@ function fbKey(){
 
 /* ── START ───────────────────────────────────── */
 async function startInventory(forceNew){
-  nome=document.getElementById('inp-nome').value.trim();
+  if(!googleUser){showToast('⚠️ Entre com sua conta Google primeiro.');return;}
+  nome=googleUser.nome;
   data=document.getElementById('inp-data').value;
-  if(!nome||nome.length<2){showToast('⚠️ Digite seu nome.');return;}
   if(!data){showToast('⚠️ Selecione a data.');return;}
   if(!setor){showToast('⚠️ Selecione um setor.');return;}
 
