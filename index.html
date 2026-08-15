@@ -172,6 +172,14 @@ input:focus,select:focus{border-color:var(--verde);background:var(--branco);}
 .qty-inp.filled{border-color:#4aaf7d;background:#edf8f2;color:#1a5c36;font-weight:700;}
 .qty-inp::-webkit-inner-spin-button,.qty-inp::-webkit-outer-spin-button{-webkit-appearance:none;}
 .qty-inp{-moz-appearance:textfield;}
+.qty-wrap{position:relative;display:flex;align-items:center;gap:4px;flex-shrink:0;}
+.btn-somar{width:26px;height:26px;flex-shrink:0;border-radius:7px;border:1.5px solid var(--verde);
+  background:var(--verde-soft);color:var(--verde);font-size:16px;font-weight:700;line-height:1;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all .13s;}
+.btn-somar:hover{background:var(--verde);color:var(--branco);}
+.badge-lanc{position:absolute;top:-7px;right:28px;background:#b8860b;color:#fff;font-size:9px;
+  font-weight:700;border-radius:20px;padding:1px 5px;cursor:pointer;white-space:nowrap;
+  box-shadow:0 1px 4px rgba(0,0,0,.2);}
 .prep-row{padding:10px 10px;align-items:flex-start;gap:6px;}
 .prep-row .p-info{padding-top:4px;min-width:0;}
 .prep-row .p-unit{min-width:20px;font-size:9.5px;}
@@ -524,6 +532,36 @@ if('serviceWorker' in navigator){
     <div class="modal-btns" style="margin-top:16px">
       <button class="btn-out" onclick="fecharNovoProduto()">Cancelar</button>
       <button class="btn-go" onclick="salvarNovoProduto()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SOMAR (encontrou o mesmo produto em outro local) -->
+<div class="overlay" id="overlay-somar">
+  <div class="modal">
+    <h3>Somar quantidade</h3>
+    <p id="somar-msg">Encontrou mais em outro local? Digite só o que achou agora — o app soma sozinho ao que já foi contado.</p>
+    <div class="fld">
+      <label>Quanto encontrou agora?</label>
+      <input type="number" id="somar-valor" placeholder="0" min="0" step="0.001" autocomplete="off"
+        onkeydown="if(event.key==='Enter') confirmarSomar()">
+    </div>
+    <p id="somar-erro" style="color:#e05252;font-size:12px;margin-top:6px;display:none"></p>
+    <div class="modal-btns" style="margin-top:16px">
+      <button class="btn-out" onclick="fecharSomar()">Cancelar</button>
+      <button class="btn-go" onclick="confirmarSomar()">Somar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL VER LANÇAMENTOS -->
+<div class="overlay" id="overlay-lancamentos">
+  <div class="modal">
+    <h3>Lançamentos</h3>
+    <p id="lanc-msg"></p>
+    <div id="lanc-lista" style="max-height:260px;overflow-y:auto"></div>
+    <div class="modal-btns" style="margin-top:16px">
+      <button class="btn-out" onclick="fecharLancamentos()" style="flex:1">Fechar</button>
     </div>
   </div>
 </div>
@@ -3586,6 +3624,11 @@ function visibleProducts(){
 
 /* ── STATE ──────────────────────────────────── */
 let nome='',data='',setor='',saved={},savedPorc={},submitted=false,saving=false;
+// Histórico de "somas rápidas" (botão +): lancamentos[cod]={qtd:[{v,ts}],porc:[{v,ts}]}
+// Existe pra quando o mesmo produto é encontrado em mais de um lugar — soma
+// sozinho em vez da pessoa ter que calcular de cabeça e digitar o total.
+let lancamentos={};
+let _somaCod=null, _somaCampo=null;
 
 /* ── CONEXÃO / BACKUP LOCAL ──────────────────────
    O Firebase, quando está sem internet, NÃO dá erro — ele fica esperando
@@ -3618,7 +3661,7 @@ function salvarBackupLocal(){
   if(!nome||!data||!setor) return;
   try{
     localStorage.setItem(chaveBackupLocal(), JSON.stringify({
-      nome, data, setor, itens:saved, porcoes:savedPorc,
+      nome, data, setor, itens:saved, porcoes:savedPorc, lancamentos,
       salvoEm:Date.now()
     }));
   }catch(e){ console.warn('Backup local falhou:', e.message); }
@@ -3679,7 +3722,7 @@ function abrirLixeira(){ showScreen('lixeira'); }
 function novaContagem(){
   if(!confirm('Iniciar nova contagem? O progresso atual não será perdido — ficará salvo no Firebase.')) return;
   // reset state
-  nome='';data='';setor='';saved={};savedPorc={};submitted=false;
+  nome='';data='';setor='';saved={};savedPorc={};lancamentos={};submitted=false;
   // reset UI
   document.querySelectorAll('.setor-btn').forEach(b=>b.classList.remove('sel'));
   setor='';
@@ -3727,14 +3770,14 @@ async function startInventory(forceNew){
   document.getElementById('btn-admin').classList.remove('gone');
   document.getElementById('btn-nova').classList.remove('gone');
 
-  saved={};savedPorc={};submitted=false;
+  saved={};savedPorc={};lancamentos={};submitted=false;
   try{
     if(!forceNew){
       const snap=await Promise.race([
         db.ref('/inventario/'+fbKey()).get(),
         new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000))
       ]);
-      if(snap.exists()){const v=snap.val();saved=v.itens||{};savedPorc=v.porcoes||{};submitted=v.status==='enviado';}
+      if(snap.exists()){const v=snap.val();saved=v.itens||{};savedPorc=v.porcoes||{};lancamentos=v.lancamentos||{};submitted=v.status==='enviado';}
     }
   }catch(e){console.warn('Draft:',e.message);}
 
@@ -3752,6 +3795,7 @@ async function startInventory(forceNew){
         if(confirm('Encontramos uma contagem salva neste aparelho ('+itensBackup+' itens, de '+quando+') que não chegou a sincronizar com o servidor.\n\nRestaurar esses itens agora?')){
           saved=Object.assign({}, saved, backup.itens);
           savedPorc=Object.assign({}, savedPorc, backup.porcoes||{});
+          lancamentos=Object.assign({}, lancamentos, backup.lancamentos||{});
         }
       }
     }
@@ -3837,6 +3881,15 @@ function togCat(i){
   sec.classList.toggle('open');
 }
 
+function qtdLancCount(cod,campo){
+  return ((lancamentos[cod]||{})[campo]||[]).length;
+}
+function badgeLancHTML(cod,campo){
+  const n=qtdLancCount(cod,campo);
+  return n>0
+    ? `<span class="badge-lanc" id="lanc_${campo}${cod}" onclick="abrirLancamentos('${cod}','${campo}')">${n}x</span>`
+    : `<span class="badge-lanc" id="lanc_${campo}${cod}" style="display:none" onclick="abrirLancamentos('${cod}','${campo}')"></span>`;
+}
 function pRow(p){
   const v=saved[p.cod]!=null?saved[p.cod]:'';
   const ro=submitted?'readonly':'';
@@ -3853,17 +3906,25 @@ function pRow(p){
       <div class="qty-dual">
         <div class="qty-col">
           <span class="qty-lbl">Qtd</span>
-          <input type="number" class="qty-inp${v!==''?' filled':''}"
-            id="q${p.cod}" value="${v}" placeholder="0"
-            min="0" step="0.001" ${ro}
-            oninput="onQty('${p.cod}',this)">
+          <div class="qty-wrap">
+            <input type="number" class="qty-inp${v!==''?' filled':''}"
+              id="q${p.cod}" value="${v}" placeholder="0"
+              min="0" step="0.001" ${ro}
+              oninput="onQty('${p.cod}',this)">
+            ${ro?'':`<button type="button" class="btn-somar" onclick="abrirSomar('${p.cod}','qtd')" title="Somar quantidade encontrada em outro local">+</button>`}
+            ${badgeLancHTML(p.cod,'qtd')}
+          </div>
         </div>
         <div class="qty-col">
           <span class="qty-lbl">Porções</span>
-          <input type="number" class="qty-inp porc-inp${vp!==''?' filled':''}"
-            id="p${p.cod}" value="${vp}" placeholder="0"
-            min="0" step="1" ${ro}
-            oninput="onPorc('${p.cod}',this)">
+          <div class="qty-wrap">
+            <input type="number" class="qty-inp porc-inp${vp!==''?' filled':''}"
+              id="p${p.cod}" value="${vp}" placeholder="0"
+              min="0" step="1" ${ro}
+              oninput="onPorc('${p.cod}',this)">
+            ${ro?'':`<button type="button" class="btn-somar" onclick="abrirSomar('${p.cod}','porc')" title="Somar porções encontradas em outro local">+</button>`}
+            ${badgeLancHTML(p.cod,'porc')}
+          </div>
         </div>
       </div>
     </div>`;
@@ -3875,10 +3936,14 @@ function pRow(p){
         <div class="p-cod">Cód. ${p.cod}</div>
       </div>
       <div class="p-unit">${p.unit}</div>
-      <input type="number" class="qty-inp${v!==''?' filled':''}"
-        id="q${p.cod}" value="${v}" placeholder="0"
-        min="0" step="0.001" ${ro}
-        oninput="onQty('${p.cod}',this)">
+      <div class="qty-wrap">
+        <input type="number" class="qty-inp${v!==''?' filled':''}"
+          id="q${p.cod}" value="${v}" placeholder="0"
+          min="0" step="0.001" ${ro}
+          oninput="onQty('${p.cod}',this)">
+        ${ro?'':`<button type="button" class="btn-somar" onclick="abrirSomar('${p.cod}','qtd')" title="Somar quantidade encontrada em outro local">+</button>`}
+        ${badgeLancHTML(p.cod,'qtd')}
+      </div>
     </div>`;
 }
 
@@ -3889,6 +3954,9 @@ function onQty(cod,el){
   }else{
     delete saved[cod];el.classList.remove('filled');
   }
+  // Digitou direto no campo = está substituindo o total, não somando.
+  // Qualquer histórico de "+" anterior deixa de fazer sentido.
+  limparLancamentos(cod,'qtd');
   const hasQty=saved[cod]!=null, hasPorc=savedPorc[cod]!=null;
   document.getElementById('row'+cod).classList.toggle('lit', hasQty||hasPorc);
   updProg();updBadges();
@@ -3908,9 +3976,130 @@ function onPorc(cod,el){
   }else{
     delete savedPorc[cod];el.classList.remove('filled');
   }
+  limparLancamentos(cod,'porc');
   const hasQty=saved[cod]!=null, hasPorc=savedPorc[cod]!=null;
   document.getElementById('row'+cod).classList.toggle('lit', hasQty||hasPorc);
   salvarBackupLocal();
+}
+
+/* ── SOMAR (botão + / achou o mesmo produto em outro local) ────── */
+function limparLancamentos(cod,campo){
+  if(lancamentos[cod] && lancamentos[cod][campo] && lancamentos[cod][campo].length){
+    delete lancamentos[cod][campo];
+    if(Object.keys(lancamentos[cod]).length===0) delete lancamentos[cod];
+  }
+  const badge=document.getElementById('lanc_'+campo+cod);
+  if(badge){ badge.style.display='none'; badge.textContent=''; }
+}
+function atualizarBadgeLanc(cod,campo){
+  const n=qtdLancCount(cod,campo);
+  const badge=document.getElementById('lanc_'+campo+cod);
+  if(!badge) return;
+  if(n>0){ badge.textContent=n+'x'; badge.style.display='inline-block'; }
+  else{ badge.style.display='none'; badge.textContent=''; }
+}
+function abrirSomar(cod,campo){
+  if(submitted) return;
+  _somaCod=cod; _somaCampo=campo;
+  const p=PRODUCTS.find(x=>x.cod===cod);
+  const store=campo==='qtd'?saved:savedPorc;
+  const atual=store[cod]!=null?store[cod]:0;
+  const rotulo=campo==='qtd'?'Qtd':'Porções';
+  document.getElementById('somar-msg').textContent=
+    (p?p.desc:'Produto')+' — '+rotulo+' já contado(a): '+atual+'. Digite só o que encontrou agora nesse outro local — o app soma sozinho.';
+  document.getElementById('somar-valor').value='';
+  document.getElementById('somar-erro').style.display='none';
+  document.getElementById('overlay-somar').classList.add('on');
+  setTimeout(()=>document.getElementById('somar-valor').focus(),100);
+}
+function fecharSomar(){
+  document.getElementById('overlay-somar').classList.remove('on');
+  _somaCod=null; _somaCampo=null;
+}
+function confirmarSomar(){
+  const raw=document.getElementById('somar-valor').value;
+  const delta=parseFloat(raw);
+  const erro=document.getElementById('somar-erro');
+  if(raw===''||isNaN(delta)||delta<=0){
+    erro.textContent='Digite um número maior que zero.';
+    erro.style.display='block';
+    return;
+  }
+  const cod=_somaCod, campo=_somaCampo;
+  if(!cod||!campo) return;
+  const store=campo==='qtd'?saved:savedPorc;
+  const atual=store[cod]!=null?store[cod]:0;
+
+  if(!lancamentos[cod]) lancamentos[cod]={};
+  if(!lancamentos[cod][campo]) lancamentos[cod][campo]=[];
+  // Se já existia uma contagem digitada manualmente antes do primeiro "+",
+  // registra ela como o lançamento inicial — assim a soma dos lançamentos
+  // sempre bate com o total, e apagar um lançamento depois fica seguro.
+  if(lancamentos[cod][campo].length===0 && atual>0){
+    lancamentos[cod][campo].push({v:atual, ts:Date.now(), inicial:true});
+  }
+  lancamentos[cod][campo].push({v:delta, ts:Date.now()});
+
+  const novo=Math.round(lancamentos[cod][campo].reduce((s,l)=>s+l.v,0)*1000)/1000;
+  store[cod]=novo;
+
+  const inputEl=document.getElementById((campo==='qtd'?'q':'p')+cod);
+  if(inputEl){ inputEl.value=novo; inputEl.classList.add('filled'); }
+  atualizarBadgeLanc(cod,campo);
+  const row=document.getElementById('row'+cod);
+  if(row) row.classList.add('lit');
+  updProg();updBadges();
+  salvarBackupLocal();
+
+  fecharSomar();
+  showToast('✅ Somado! Total agora: '+novo);
+}
+function abrirLancamentos(cod,campo){
+  if(qtdLancCount(cod,campo)===0) return;
+  _somaCod=cod; _somaCampo=campo;
+  const p=PRODUCTS.find(x=>x.cod===cod);
+  const rotulo=campo==='qtd'?'Qtd':'Porções';
+  document.getElementById('lanc-msg').textContent=(p?p.desc:'Produto')+' — '+rotulo;
+  const lista=lancamentos[cod][campo];
+  document.getElementById('lanc-lista').innerHTML=lista.map((l,i)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ede8">
+      <span style="font-size:13px">${l.inicial?'Contagem inicial: '+l.v:'+ '+l.v+' encontrado depois'}
+        <span style="color:var(--muted);font-size:11px;display:block">${new Date(l.ts).toLocaleString('pt-BR')}</span></span>
+      <button class="btn-del" onclick="removerLancamento('${cod}','${campo}',${i})" title="Remover este lançamento">🗑️</button>
+    </div>`).join('');
+  document.getElementById('overlay-lancamentos').classList.add('on');
+}
+function fecharLancamentos(){
+  document.getElementById('overlay-lancamentos').classList.remove('on');
+}
+function removerLancamento(cod,campo,idx){
+  if(!lancamentos[cod] || !lancamentos[cod][campo]) return;
+  lancamentos[cod][campo].splice(idx,1);
+
+  const restante=lancamentos[cod][campo];
+  const store=campo==='qtd'?saved:savedPorc;
+  if(restante.length>0){
+    store[cod]=Math.round(restante.reduce((s,l)=>s+l.v,0)*1000)/1000;
+  }else{
+    delete store[cod];
+    delete lancamentos[cod][campo];
+    if(Object.keys(lancamentos[cod]).length===0) delete lancamentos[cod];
+  }
+
+  const inputEl=document.getElementById((campo==='qtd'?'q':'p')+cod);
+  if(inputEl){
+    inputEl.value=store[cod]!=null?store[cod]:'';
+    inputEl.classList.toggle('filled', store[cod]!=null);
+  }
+  atualizarBadgeLanc(cod,campo);
+  const hasQty=saved[cod]!=null, hasPorc=savedPorc[cod]!=null;
+  const row=document.getElementById('row'+cod);
+  if(row) row.classList.toggle('lit', hasQty||hasPorc);
+  updProg();updBadges();
+  salvarBackupLocal();
+
+  if(qtdLancCount(cod,campo)>0) abrirLancamentos(cod,campo);
+  else fecharLancamentos();
 }
 
 // togCat defined in buildList
@@ -3995,7 +4184,7 @@ async function saveProgress(){
   try{
     await comTimeout(db.ref('/inventario/'+fbKey()).update({
       colaborador:nome,data,setor,status:'andamento',
-      timestamp:Date.now(),itens:saved,porcoes:savedPorc
+      timestamp:Date.now(),itens:saved,porcoes:savedPorc,lancamentos
     }), 12000);
     showToast('✅ Rascunho salvo!');
   }catch(err){
@@ -4026,7 +4215,7 @@ async function submitInventory(){
   try{
     await comTimeout(db.ref('/inventario/'+fbKey()).update({
       colaborador:nome,data,setor,status:'enviado',
-      timestamp:Date.now(),tsEnvio:Date.now(),itens:saved,porcoes:savedPorc
+      timestamp:Date.now(),tsEnvio:Date.now(),itens:saved,porcoes:savedPorc,lancamentos
     }), 12000);
     submitted=true;
     limparBackupLocal(); // enviado com sucesso, não precisa mais do backup
@@ -4034,6 +4223,7 @@ async function submitInventory(){
     document.getElementById('btn-enviar').textContent='✅ Enviado!';
     document.getElementById('sub-banner').classList.remove('gone');
     document.querySelectorAll('.qty-inp').forEach(i=>i.readOnly=true);
+    document.querySelectorAll('.btn-somar').forEach(b=>b.style.display='none');
     showToast('🎉 Contagem enviada com sucesso!',4000);
   }catch(err){
     if(err && err.message==='timeout'){
