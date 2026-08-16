@@ -4510,6 +4510,9 @@ function exportSetor(){
     ['COD','DESCRIÇÃO','UN','CLASSE','SUB CLASSE','QUANTIDADE']
   ];
   PRODUCTS.forEach(p=>{
+    // Itens com conversão automática ativa não entram na planilha Allfood —
+    // já entregaram a fatia deles pro produto destino (ver aba Conversões).
+    if(conversaoInfo(p.cod)) return;
     const q=saved[p.cod]!=null?saved[p.cod]:'';
     const meta=ALLFOOD_META[p.cod]||['',''];
     rows.push([p.cod,p.desc,p.unit,meta[0],meta[1],q]);
@@ -4564,6 +4567,9 @@ async function exportConsolidado(){
     ];
     let totalItens=0;
     PRODUCTS.forEach(p=>{
+      // Itens com conversão automática ativa não entram na planilha Allfood —
+      // já entregaram a fatia deles pro produto destino (ver aba Conversões).
+      if(conversaoInfo(p.cod)) return;
       if(totMap[p.cod]&&totMap[p.cod].total>0){
         const meta=ALLFOOD_META[p.cod]||['',''];
         wsData.push([parseInt(p.cod)||p.cod,p.desc,p.unit,meta[0],meta[1],totMap[p.cod].total]);
