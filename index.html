@@ -516,6 +516,7 @@ if('serviceWorker' in navigator){
       <option value="inativo">Somente inativos</option>
     </select>
     <button class="btn-ger-novo" onclick="abrirNovoProduto()">➕ Novo Produto</button>
+    <button class="btn-ger-novo" onclick="abrirColaboradores()">👥 Colaboradores</button>
   </div>
   <div class="inv-body" id="ger-inv-body">
     <div id="ger-list"></div>
@@ -523,6 +524,26 @@ if('serviceWorker' in navigator){
   <div class="action-bar">
     <button class="btn-out" onclick="showScreen('login')">← Sair</button>
     <button class="btn-send" id="btn-salvar-todos" onclick="salvarTodosProdutosGer()">💾 Salvar Todos</button>
+  </div>
+  <datalist id="dl-produtos-ger"></datalist>
+</div>
+
+<!-- MODAL COLABORADORES AUTORIZADOS (login Google) -->
+<div class="overlay" id="overlay-colaboradores">
+  <div class="modal">
+    <h3>Colaboradores Autorizados</h3>
+    <p>Só esses e-mails conseguem entrar no app pelo login do Google.</p>
+    <div id="colab-lista" style="max-height:220px;overflow-y:auto;margin-bottom:14px"></div>
+    <div class="fld">
+      <label>Adicionar e-mail (conta Google)</label>
+      <input type="email" id="colab-novo-email" placeholder="nome@gmail.com" autocomplete="off"
+        onkeydown="if(event.key==='Enter') adicionarColaborador()">
+    </div>
+    <p id="colab-erro" style="color:#e05252;font-size:12px;margin-top:6px;display:none"></p>
+    <div class="modal-btns" style="margin-top:16px">
+      <button class="btn-out" onclick="fecharColaboradores()">Fechar</button>
+      <button class="btn-go" onclick="adicionarColaborador()">Adicionar</button>
+    </div>
   </div>
 </div>
 
@@ -3714,10 +3735,18 @@ let PRODUTOS_INATIVOS = new Set();
 // Gerencial (produto a produto), que têm prioridade sobre a regra da
 // categoria — pra mais ou pra menos.
 let PORCAO_OVERRIDE = new Map();
+// Conversão automática (ex: camarão empanado → camarão limpo). Cada
+// entrada: cod -> {ativo, percentual, destino}. Definida produto a
+// produto na tela Gerencial, salva em /produto_overrides/{cod}.conversao.
+let CONVERSAO_MAP = new Map();
 function produtoUsaPorcao(cod){
   if(PORCAO_OVERRIDE.has(cod)) return PORCAO_OVERRIDE.get(cod);
   const p=PRODUCTS.find(x=>x.cod===cod);
   return !!(p && p.cat==='PREPARADOS DE COZINHA');
+}
+function conversaoInfo(cod){
+  const c=CONVERSAO_MAP.get(cod);
+  return (c && c.ativo && c.destino && c.percentual>0) ? c : null;
 }
 
 async function loadOverrides(){
@@ -3751,6 +3780,13 @@ async function loadOverrides(){
         if(o.ativo===false) PRODUTOS_INATIVOS.add(cod);
         else PRODUTOS_INATIVOS.delete(cod);
         if(o.porcao===true || o.porcao===false) PORCAO_OVERRIDE.set(cod, o.porcao);
+        if(o.conversao && typeof o.conversao==='object'){
+          CONVERSAO_MAP.set(cod, {
+            ativo: !!o.conversao.ativo,
+            percentual: Number(o.conversao.percentual)||0,
+            destino: o.conversao.destino||''
+          });
+        }
       });
     }
   }catch(e){ console.warn('Overrides de produtos:', e.message); }
@@ -4021,10 +4057,14 @@ function togCat(i){
 function qtdLancCount(cod,campo){
   return ((lancamentos[cod]||{})[campo]||[]).length;
 }
+function temConversao(cod,campo){
+  return ((lancamentos[cod]||{})[campo]||[]).some(l=>l.tipo==='conversao');
+}
 function badgeLancHTML(cod,campo){
   const n=qtdLancCount(cod,campo);
+  const txt=n>0?((temConversao(cod,campo)?'🔄 ':'')+n+'x'):'';
   return n>0
-    ? `<span class="badge-lanc" id="lanc_${campo}${cod}" onclick="abrirLancamentos('${cod}','${campo}')">${n}x</span>`
+    ? `<span class="badge-lanc" id="lanc_${campo}${cod}" onclick="abrirLancamentos('${cod}','${campo}')">${txt}</span>`
     : `<span class="badge-lanc" id="lanc_${campo}${cod}" style="display:none" onclick="abrirLancamentos('${cod}','${campo}')"></span>`;
 }
 function pRow(p){
@@ -4097,6 +4137,7 @@ function onQty(cod,el){
   const hasQty=saved[cod]!=null, hasPorc=savedPorc[cod]!=null;
   document.getElementById('row'+cod).classList.toggle('lit', hasQty||hasPorc);
   updProg();updBadges();
+  aplicarConversao(cod);
   salvarBackupLocal();
   // Assim que o colaborador começa a digitar a quantidade, limpa a busca
   // para deixar a caixa pronta pro próximo produto.
@@ -4132,7 +4173,7 @@ function atualizarBadgeLanc(cod,campo){
   const n=qtdLancCount(cod,campo);
   const badge=document.getElementById('lanc_'+campo+cod);
   if(!badge) return;
-  if(n>0){ badge.textContent=n+'x'; badge.style.display='inline-block'; }
+  if(n>0){ badge.textContent=(temConversao(cod,campo)?'🔄 ':'')+n+'x'; badge.style.display='inline-block'; }
   else{ badge.style.display='none'; badge.textContent=''; }
 }
 function abrirSomar(cod,campo){
@@ -4198,12 +4239,23 @@ function abrirLancamentos(cod,campo){
   const rotulo=campo==='qtd'?'Qtd':'Porções';
   document.getElementById('lanc-msg').textContent=(p?p.desc:'Produto')+' — '+rotulo;
   const lista=lancamentos[cod][campo];
-  document.getElementById('lanc-lista').innerHTML=lista.map((l,i)=>`
+  document.getElementById('lanc-lista').innerHTML=lista.map((l,i)=>{
+    let desc;
+    if(l.tipo==='conversao'){
+      const po=PRODUCTS.find(x=>x.cod===l.origem);
+      desc='🔄 + '+l.v+' vindo de conversão automática ('+(po?po.desc:'cód. '+l.origem)+', '+l.percentual+'% de '+l.origemQtd+')';
+    }else if(l.inicial){
+      desc='Contagem inicial: '+l.v;
+    }else{
+      desc='+ '+l.v+' encontrado depois';
+    }
+    return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ede8">
-      <span style="font-size:13px">${l.inicial?'Contagem inicial: '+l.v:'+ '+l.v+' encontrado depois'}
+      <span style="font-size:13px">${desc}
         <span style="color:var(--muted);font-size:11px;display:block">${new Date(l.ts).toLocaleString('pt-BR')}</span></span>
       <button class="btn-del" onclick="removerLancamento('${cod}','${campo}',${i})" title="Remover este lançamento">🗑️</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('overlay-lancamentos').classList.add('on');
 }
 function fecharLancamentos(){
@@ -4237,6 +4289,77 @@ function removerLancamento(cod,campo,idx){
 
   if(qtdLancCount(cod,campo)>0) abrirLancamentos(cod,campo);
   else fecharLancamentos();
+}
+
+/* ── CONVERSÃO AUTOMÁTICA (ex: empanado → limpo) ──────────────
+   Quando um produto com conversão ativa é contado, uma fatia (%)
+   do que foi digitado é somada automaticamente no produto destino,
+   usando o mesmo mecanismo de "lançamentos" do botão "+" (por isso
+   fica visível, editável e removível igual a uma soma manual).
+   O produto de origem continua contando normalmente, do jeito dele —
+   a conversão só alimenta o destino, não mexe no próprio valor. ── */
+function aplicarConversao(origemCod){
+  const conv=conversaoInfo(origemCod);
+  const destinoCod=conv?conv.destino:null;
+  // Mesmo sem conversão ativa agora, pode existir um lançamento antigo
+  // de uma conversão que foi desativada/mudou de destino — precisa achar
+  // e limpar em QUALQUER produto que tenha esse cod como origem.
+  const origemQtd=saved[origemCod];
+  const valido=conv && origemQtd!=null && !isNaN(origemQtd) && origemQtd>0;
+  const novoValor=valido?Math.round(origemQtd*(conv.percentual/100)*1000)/1000:0;
+
+  Object.keys(lancamentos).forEach(cod=>{
+    const arr=(lancamentos[cod]||{}).qtd;
+    if(!arr) return;
+    const idx=arr.findIndex(l=>l.tipo==='conversao' && l.origem===origemCod);
+    if(idx===-1) return;
+    if(cod===destinoCod && valido){
+      // já existe um lançamento desse mesmo destino: só atualiza
+      arr[idx].v=novoValor; arr[idx].ts=Date.now(); arr[idx].percentual=conv.percentual; arr[idx].origemQtd=origemQtd;
+    }else{
+      // destino mudou ou conversão foi desligada: remove daqui
+      arr.splice(idx,1);
+      if(arr.length===0){ delete lancamentos[cod].qtd; if(Object.keys(lancamentos[cod]).length===0) delete lancamentos[cod]; }
+      recalcularDestino(cod);
+    }
+  });
+
+  if(valido && destinoCod){
+    if(!lancamentos[destinoCod]) lancamentos[destinoCod]={};
+    if(!lancamentos[destinoCod].qtd) lancamentos[destinoCod].qtd=[];
+    const arr=lancamentos[destinoCod].qtd;
+    const jaExiste=arr.some(l=>l.tipo==='conversao' && l.origem===origemCod);
+    if(!jaExiste){
+      // Se o destino já tinha um valor digitado manualmente antes de
+      // qualquer lançamento, preserva ele como o lançamento inicial —
+      // mesma regra do botão "+".
+      const atual=saved[destinoCod];
+      if(arr.length===0 && atual!=null && atual>0){
+        arr.push({v:atual, ts:Date.now(), inicial:true});
+      }
+      arr.push({v:novoValor, ts:Date.now(), tipo:'conversao', origem:origemCod, percentual:conv.percentual, origemQtd});
+    }
+    recalcularDestino(destinoCod);
+  }
+}
+function recalcularDestino(cod){
+  const arr=(lancamentos[cod]||{}).qtd;
+  if(arr && arr.length){
+    saved[cod]=Math.round(arr.reduce((s,l)=>s+l.v,0)*1000)/1000;
+  }else if(arr){
+    delete saved[cod];
+    delete lancamentos[cod].qtd;
+    if(Object.keys(lancamentos[cod]).length===0) delete lancamentos[cod];
+  }
+  const inputEl=document.getElementById('q'+cod);
+  if(inputEl){
+    inputEl.value=saved[cod]!=null?saved[cod]:'';
+    inputEl.classList.toggle('filled', saved[cod]!=null);
+  }
+  atualizarBadgeLanc(cod,'qtd');
+  const row=document.getElementById('row'+cod);
+  if(row) row.classList.toggle('lit', saved[cod]!=null || savedPorc[cod]!=null);
+  updProg();updBadges();
 }
 
 // togCat defined in buildList
@@ -4504,6 +4627,32 @@ async function exportConsolidado(){
       ws3['!cols']=[{wch:10},{wch:44},{wch:8},{wch:16},{wch:55}];
       for(let c=0;c<5;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws3[a])ws3[a].s=blueStyle;}
       XLSX.utils.book_append_sheet(wb,ws3,'Porções');
+    }
+
+    // ── Aba 4: Conversões (empanado → limpo, geradas automaticamente) ──
+    const convData=[['PRODUTO ORIGEM','COD ORIGEM','QTD CONTADA','% CONVERSÃO','PRODUTO DESTINO','COD DESTINO','QTD CONVERTIDA','SETOR','COLABORADOR']];
+    let totalConv=0;
+    entries.forEach(e=>{
+      const lanc=e.lancamentos||{};
+      Object.keys(lanc).forEach(destCod=>{
+        const arr=(lanc[destCod]||{}).qtd;
+        if(!arr) return;
+        arr.forEach(l=>{
+          if(l.tipo!=='conversao') return;
+          const po=PRODUCTS.find(x=>x.cod===l.origem);
+          const pd=PRODUCTS.find(x=>x.cod===destCod);
+          convData.push([po?po.desc:'',l.origem,l.origemQtd,l.percentual,pd?pd.desc:'',destCod,l.v,e.setor,e.colaborador]);
+          totalConv++;
+        });
+      });
+    });
+    if(totalConv>0){
+      convData.push(['','','','','','','','','']);
+      convData.push(['Total de conversões: ',totalConv,'','','','','','','']);
+      const ws4=XLSX.utils.aoa_to_sheet(convData);
+      ws4['!cols']=[{wch:36},{wch:10},{wch:14},{wch:12},{wch:36},{wch:10},{wch:16},{wch:18},{wch:20}];
+      for(let c=0;c<9;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws4[a])ws4[a].s=blueStyle;}
+      XLSX.utils.book_append_sheet(wb,ws4,'Conversões');
     }
 
     const setorSuffix=(document.getElementById('f-setor').value||'Todos').replace(/[\s&]/g,'_');
@@ -4889,7 +5038,16 @@ async function doGerAccess(){
 let _gerCats={};
 let _gerCatKeys=[];
 
+let _dlProdutosPronto=false;
+function popularDatalistProdutos(){
+  if(_dlProdutosPronto) return;
+  const dl=document.getElementById('dl-produtos-ger');
+  if(!dl) return;
+  dl.innerHTML=PRODUCTS.map(p=>`<option value="${escAttr(p.cod)}">${escAttr(p.cod)} — ${escAttr(p.desc)}</option>`).join('');
+  _dlProdutosPronto=true;
+}
 function buildGerList(){
+  popularDatalistProdutos();
   const con=document.getElementById('ger-list');
   con.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">⏳ Carregando produtos...</div>';
 
@@ -4949,6 +5107,7 @@ function escAttr(s){
 function gerRow(p){
   const inativo=PRODUTOS_INATIVOS.has(p.cod);
   const meta=ALLFOOD_META[p.cod]||['',''];
+  const conv=CONVERSAO_MAP.get(p.cod)||{ativo:false,percentual:'',destino:''};
   return `
     <div class="ger-row${inativo?' inativo':''}" id="grow${p.cod}">
       <div class="ger-field ger-small ger-codfield">
@@ -4983,8 +5142,27 @@ function gerRow(p){
         <input type="checkbox" id="gativo${p.cod}" ${inativo?'':'checked'}>
         Ativo
       </label>
+      <div class="ger-field ger-small">
+        <label class="ger-toggle-wrap" style="margin:0 0 4px">
+          <input type="checkbox" id="gconvativo${p.cod}" ${conv.ativo?'checked':''} onchange="toggleConvGer('${p.cod}')">
+          Permite conversão
+        </label>
+      </div>
+      <div class="ger-field ger-small" id="gconvwrap-pct${p.cod}" style="${conv.ativo?'':'display:none'}">
+        <label>% de conversão</label>
+        <input type="number" class="ger-inp" id="gconvpct${p.cod}" value="${conv.percentual||''}" min="0" max="100" step="0.1" placeholder="35">
+      </div>
+      <div class="ger-field ger-mid" id="gconvwrap-dest${p.cod}" style="${conv.ativo?'':'display:none'}">
+        <label>Alimenta o produto</label>
+        <input type="text" class="ger-inp" id="gconvdest${p.cod}" list="dl-produtos-ger" value="${escAttr(conv.destino||'')}" placeholder="código do produto limpo">
+      </div>
       <button class="btn-ger-save" onclick="salvarProdutoGer('${p.cod}')">💾 Salvar</button>
     </div>`;
+}
+function toggleConvGer(cod){
+  const on=document.getElementById('gconvativo'+cod).checked;
+  document.getElementById('gconvwrap-pct'+cod).style.display=on?'':'none';
+  document.getElementById('gconvwrap-dest'+cod).style.display=on?'':'none';
 }
 
 function filterProdsGer(q){
@@ -5025,12 +5203,40 @@ async function salvarProdutoGer(cod, opts){
   const subclasse=document.getElementById('gsub'+cod).value.trim();
   const ativo=document.getElementById('gativo'+cod).checked;
   const porcao=document.getElementById('gporc'+cod).checked;
+  const convAtivoEl=document.getElementById('gconvativo'+cod);
+  const convAtivo=convAtivoEl?convAtivoEl.checked:false;
+  const convPctRaw=convAtivo?document.getElementById('gconvpct'+cod).value.trim():'';
+  const convDestino=convAtivo?document.getElementById('gconvdest'+cod).value.trim():'';
+  const convPct=convPctRaw===''?NaN:parseFloat(convPctRaw);
 
   if(!novoCod||!desc||!unit||!cat){
     if(silent) throw new Error('Código, Descrição, Unidade e Categoria são obrigatórios (produto '+cod+').');
     showToast('⚠️ Código, Descrição, Unidade e Categoria são obrigatórios.');
     return;
   }
+  if(convAtivo){
+    if(convPctRaw===''||isNaN(convPct)||convPct<=0||convPct>100){
+      if(silent) throw new Error('Percentual de conversão inválido (produto '+cod+').');
+      showToast('⚠️ Informe um percentual de conversão entre 0 e 100.');
+      return;
+    }
+    if(!convDestino){
+      if(silent) throw new Error('Produto destino da conversão não informado (produto '+cod+').');
+      showToast('⚠️ Informe o produto destino da conversão.');
+      return;
+    }
+    if(convDestino===novoCod){
+      if(silent) throw new Error('Conversão não pode apontar para o próprio produto (produto '+cod+').');
+      showToast('⚠️ O produto destino da conversão não pode ser ele mesmo.');
+      return;
+    }
+    if(!PRODUCTS.find(x=>x.cod===convDestino)){
+      if(silent) throw new Error('Produto destino '+convDestino+' não encontrado (produto '+cod+').');
+      showToast('⚠️ Produto destino da conversão ('+convDestino+') não existe.');
+      return;
+    }
+  }
+  const conversaoObj={ativo:convAtivo, percentual:convAtivo?convPct:0, destino:convAtivo?convDestino:''};
 
   // ── Mudança de código ────────────────────────────────
   // Trocar o código de um produto existente não é seguro fazer "no lugar":
@@ -5050,8 +5256,8 @@ async function salvarProdutoGer(cod, opts){
 
     try{
       await db.ref('/produtos_extras/'+novoCod).set({cod:novoCod,desc,unit,cat,criadoEm:Date.now(),migradoDe:cod});
-      await db.ref('/produto_overrides/'+novoCod).set({desc,unit,cat,classe,subclasse,ativo:true,porcao,editadoEm:Date.now()});
-      await db.ref('/produto_overrides/'+cod).set({desc,unit,cat,classe,subclasse,ativo:false,porcao,migradoPara:novoCod,editadoEm:Date.now()});
+      await db.ref('/produto_overrides/'+novoCod).set({desc,unit,cat,classe,subclasse,ativo:true,porcao,conversao:conversaoObj,editadoEm:Date.now()});
+      await db.ref('/produto_overrides/'+cod).set({desc,unit,cat,classe,subclasse,ativo:false,porcao,conversao:{ativo:false,percentual:0,destino:''},migradoPara:novoCod,editadoEm:Date.now()});
 
       if(!PRODUCTS.find(x=>x.cod===novoCod)) PRODUCTS.push({cod:novoCod,desc,unit,cat});
       ALLFOOD_META[novoCod]=[classe,subclasse];
@@ -5059,6 +5265,8 @@ async function salvarProdutoGer(cod, opts){
       PRODUTOS_INATIVOS.delete(novoCod);
       PORCAO_OVERRIDE.set(novoCod, porcao);
       PORCAO_OVERRIDE.set(cod, porcao);
+      CONVERSAO_MAP.set(novoCod, conversaoObj);
+      CONVERSAO_MAP.set(cod, {ativo:false,percentual:0,destino:''});
 
       if(!silent){showToast('✅ Código atualizado: '+cod+' → '+novoCod);buildGerList();}
     }catch(err){
@@ -5071,7 +5279,7 @@ async function salvarProdutoGer(cod, opts){
 
   try{
     await db.ref('/produto_overrides/'+cod).set({
-      desc,unit,cat,classe,subclasse,ativo,porcao,
+      desc,unit,cat,classe,subclasse,ativo,porcao,conversao:conversaoObj,
       editadoEm:Date.now()
     });
 
@@ -5080,6 +5288,8 @@ async function salvarProdutoGer(cod, opts){
     ALLFOOD_META[cod]=[classe,subclasse];
     if(ativo) PRODUTOS_INATIVOS.delete(cod); else PRODUTOS_INATIVOS.add(cod);
     PORCAO_OVERRIDE.set(cod, porcao);
+    CONVERSAO_MAP.set(cod, conversaoObj);
+    if(!convAtivo) aplicarConversao(cod); // desligou a conversão: limpa lançamento pendente no destino antigo
 
     const row=document.getElementById('grow'+cod);
     if(row) row.classList.toggle('inativo', !ativo);
@@ -5221,13 +5431,87 @@ function produtoGerMudou(cod){
   const meta=ALLFOOD_META[cod]||['',''];
   const inativoAtual=PRODUTOS_INATIVOS.has(cod);
 
+  const convAtivoEl=document.getElementById('gconvativo'+cod);
+  const convAtivo=convAtivoEl?convAtivoEl.checked:false;
+  const convPct=convAtivo?(parseFloat(document.getElementById('gconvpct'+cod).value)||0):0;
+  const convDestino=convAtivo?document.getElementById('gconvdest'+cod).value.trim():'';
+  const convAtual=CONVERSAO_MAP.get(cod)||{ativo:false,percentual:0,destino:''};
+
   return desc!==p.desc || unit!==p.unit || cat!==p.cat ||
          classe!==(meta[0]||'') || subclasse!==(meta[1]||'') ||
          ativo===inativoAtual || // ativo(checkbox) deve ser o oposto de "está inativo"
-         porcao!==produtoUsaPorcao(cod);
+         porcao!==produtoUsaPorcao(cod) ||
+         convAtivo!==!!convAtual.ativo || convPct!==(convAtual.percentual||0) || convDestino!==(convAtual.destino||'');
 }
 
 /* ── NOVO PRODUTO ─────────────────────────────── */
+/* ── COLABORADORES AUTORIZADOS (login Google) ──── */
+function keyParaEmail(key){
+  return (key||'').replace(/,/g, '.');
+}
+async function abrirColaboradores(){
+  document.getElementById('colab-novo-email').value='';
+  document.getElementById('colab-erro').style.display='none';
+  document.getElementById('overlay-colaboradores').classList.add('on');
+  await carregarColaboradores();
+}
+function fecharColaboradores(){
+  document.getElementById('overlay-colaboradores').classList.remove('on');
+}
+async function carregarColaboradores(){
+  const con=document.getElementById('colab-lista');
+  con.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">Carregando...</p>';
+  try{
+    const snap=await comTimeout(db.ref('/colaboradores_autorizados').get(), 10000);
+    if(!snap.exists()){
+      con.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">Nenhum e-mail autorizado ainda — o primeiro a fazer login vira autorizado automaticamente.</p>';
+      return;
+    }
+    const dados=snap.val();
+    const chaves=Object.keys(dados).filter(k=>dados[k]===true).sort();
+    if(!chaves.length){
+      con.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px 0">Nenhum e-mail autorizado ainda.</p>';
+      return;
+    }
+    con.innerHTML=chaves.map(k=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ede8">
+        <span style="font-size:13px">${keyParaEmail(k)}</span>
+        <button class="btn-del" onclick="removerColaborador('${k}')" title="Remover acesso">🗑️</button>
+      </div>`).join('');
+  }catch(err){
+    con.innerHTML='<p style="color:#e05252;font-size:13px;padding:8px 0">Erro ao carregar: '+err.message+'</p>';
+  }
+}
+async function adicionarColaborador(){
+  const email=document.getElementById('colab-novo-email').value.trim().toLowerCase();
+  const erro=document.getElementById('colab-erro');
+  erro.style.display='none';
+  if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    erro.textContent='Digite um e-mail válido.';
+    erro.style.display='block';
+    return;
+  }
+  try{
+    await comTimeout(db.ref('/colaboradores_autorizados/'+emailKey(email)).set(true), 10000);
+    document.getElementById('colab-novo-email').value='';
+    showToast('✅ '+email+' autorizado!');
+    await carregarColaboradores();
+  }catch(err){
+    erro.textContent='Erro ao salvar: '+err.message;
+    erro.style.display='block';
+  }
+}
+async function removerColaborador(key){
+  if(!confirm('Remover o acesso de '+keyParaEmail(key)+'?\n\nEssa pessoa não vai conseguir mais entrar no app com essa conta Google.')) return;
+  try{
+    await comTimeout(db.ref('/colaboradores_autorizados/'+key).remove(), 10000);
+    showToast('✅ Acesso removido.');
+    await carregarColaboradores();
+  }catch(err){
+    showToast('❌ Erro ao remover: '+err.message);
+  }
+}
+
 function abrirNovoProduto(){
   ['np-cod','np-desc','np-unit','np-cat','np-classe','np-sub'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('np-porcao').checked=false;
