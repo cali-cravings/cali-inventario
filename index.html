@@ -4517,7 +4517,44 @@ function exportSetor(){
     const meta=ALLFOOD_META[p.cod]||['',''];
     rows.push([p.cod,p.desc,p.unit,meta[0],meta[1],q]);
   });
-  doXlsx(rows,'Contagem_'+setor.replace(/\s/g,'_')+'_'+data);
+
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.aoa_to_sheet(rows);
+  ws1['!cols']=[{wch:12},{wch:44},{wch:10},{wch:12},{wch:18},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws1,'Contagem');
+
+  // ── Aba Porções (separada da contagem principal) ──
+  const porcRows=[['COD','DESCRIÇÃO','UN','PORÇÕES']];
+  PRODUCTS.forEach(p=>{
+    const vp=savedPorc[p.cod];
+    if(vp!=null && vp>0) porcRows.push([p.cod,p.desc,p.unit,vp]);
+  });
+  if(porcRows.length>1){
+    const ws2=XLSX.utils.aoa_to_sheet(porcRows);
+    ws2['!cols']=[{wch:12},{wch:44},{wch:10},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws2,'Porções');
+  }
+
+  // ── Aba Conversões (empanado → limpo) desta contagem ──
+  const convRows=[['PRODUTO ORIGEM','COD ORIGEM','QTD CONTADA','% CONVERSÃO','QTD CONVERTIDA','QTD NÃO CONVERTIDA (EMPANAMENTO)','PRODUTO DESTINO','COD DESTINO']];
+  Object.keys(lancamentos).forEach(destCod=>{
+    const arr=(lancamentos[destCod]||{}).qtd;
+    if(!arr) return;
+    arr.forEach(l=>{
+      if(l.tipo!=='conversao') return;
+      const po=PRODUCTS.find(x=>x.cod===l.origem);
+      const pd=PRODUCTS.find(x=>x.cod===destCod);
+      const diferenca=Math.round((l.origemQtd-l.v)*1000)/1000;
+      convRows.push([po?po.desc:'',l.origem,l.origemQtd,l.percentual,l.v,diferenca,pd?pd.desc:'',destCod]);
+    });
+  });
+  if(convRows.length>1){
+    const ws3=XLSX.utils.aoa_to_sheet(convRows);
+    ws3['!cols']=[{wch:36},{wch:10},{wch:14},{wch:12},{wch:16},{wch:24},{wch:36},{wch:10}];
+    XLSX.utils.book_append_sheet(wb,ws3,'Conversões');
+  }
+
+  XLSX.writeFile(wb,'Contagem_'+setor.replace(/\s/g,'_')+'_'+data+'.xlsx');
 }
 
 /* ── EXPORT CONSOLIDADO ──────────────────────── */
@@ -4636,7 +4673,7 @@ async function exportConsolidado(){
     }
 
     // ── Aba 4: Conversões (empanado → limpo, geradas automaticamente) ──
-    const convData=[['PRODUTO ORIGEM','COD ORIGEM','QTD CONTADA','% CONVERSÃO','PRODUTO DESTINO','COD DESTINO','QTD CONVERTIDA','SETOR','COLABORADOR']];
+    const convData=[['PRODUTO ORIGEM','COD ORIGEM','QTD CONTADA','% CONVERSÃO','QTD CONVERTIDA','QTD NÃO CONVERTIDA (EMPANAMENTO)','PRODUTO DESTINO','COD DESTINO','SETOR','COLABORADOR']];
     let totalConv=0;
     entries.forEach(e=>{
       const lanc=e.lancamentos||{};
@@ -4647,17 +4684,18 @@ async function exportConsolidado(){
           if(l.tipo!=='conversao') return;
           const po=PRODUCTS.find(x=>x.cod===l.origem);
           const pd=PRODUCTS.find(x=>x.cod===destCod);
-          convData.push([po?po.desc:'',l.origem,l.origemQtd,l.percentual,pd?pd.desc:'',destCod,l.v,e.setor,e.colaborador]);
+          const diferenca=Math.round((l.origemQtd-l.v)*1000)/1000;
+          convData.push([po?po.desc:'',l.origem,l.origemQtd,l.percentual,l.v,diferenca,pd?pd.desc:'',destCod,e.setor,e.colaborador]);
           totalConv++;
         });
       });
     });
     if(totalConv>0){
-      convData.push(['','','','','','','','','']);
-      convData.push(['Total de conversões: ',totalConv,'','','','','','','']);
+      convData.push(['','','','','','','','','','']);
+      convData.push(['Total de conversões: ',totalConv,'','','','','','','','']);
       const ws4=XLSX.utils.aoa_to_sheet(convData);
-      ws4['!cols']=[{wch:36},{wch:10},{wch:14},{wch:12},{wch:36},{wch:10},{wch:16},{wch:18},{wch:20}];
-      for(let c=0;c<9;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws4[a])ws4[a].s=blueStyle;}
+      ws4['!cols']=[{wch:36},{wch:10},{wch:14},{wch:12},{wch:16},{wch:24},{wch:36},{wch:10},{wch:18},{wch:20}];
+      for(let c=0;c<10;c++){const a=XLSX.utils.encode_cell({r:0,c});if(ws4[a])ws4[a].s=blueStyle;}
       XLSX.utils.book_append_sheet(wb,ws4,'Conversões');
     }
 
