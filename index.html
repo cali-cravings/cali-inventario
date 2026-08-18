@@ -4227,6 +4227,10 @@ function confirmarSomar(){
   const row=document.getElementById('row'+cod);
   if(row) row.classList.add('lit');
   updProg();updBadges();
+  // Usar o "+" pra somar também precisa disparar a conversão automática —
+  // sem isso, quem soma em vez de digitar direto no campo nunca alimenta
+  // o produto destino (bug real: contagem por "+" ficava sem conversão).
+  if(campo==='qtd') aplicarConversao(cod);
   salvarBackupLocal();
 
   fecharSomar();
@@ -4285,6 +4289,9 @@ function removerLancamento(cod,campo,idx){
   const row=document.getElementById('row'+cod);
   if(row) row.classList.toggle('lit', hasQty||hasPorc);
   updProg();updBadges();
+  // Remover um lançamento muda o total do produto — se ele for origem de
+  // conversão, o destino precisa recalcular também.
+  if(campo==='qtd') aplicarConversao(cod);
   salvarBackupLocal();
 
   if(qtdLancCount(cod,campo)>0) abrirLancamentos(cod,campo);
