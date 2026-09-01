@@ -3893,7 +3893,7 @@ function visibleProducts(){
 }
 
 /* ── STATE ──────────────────────────────────── */
-let nome='',data='',setor='',saved={},savedPorc={},submitted=false,saving=false;
+let nome='',data='',setor='',saved={},savedPorc={},submitted=false,saving=false,contagemSufixo='';
 // Histórico de "somas rápidas" (botão +): lancamentos[cod]={qtd:[{v,ts}],porc:[{v,ts}]}
 // Existe pra quando o mesmo produto é encontrado em mais de um lugar — soma
 // sozinho em vez da pessoa ter que calcular de cabeça e digitar o total.
@@ -4016,7 +4016,8 @@ function toggleAdmin(){
 /* ── FIREBASE KEY ────────────────────────────── */
 function fbKey(){
   return data+'_'+setor.replace(/\s+/g,'_')+'_'+
-    nome.replace(/[^a-zA-Z0-9]/g,'_').substring(0,20).toLowerCase();
+    nome.replace(/[^a-zA-Z0-9]/g,'_').substring(0,20).toLowerCase()+
+    (contagemSufixo?('_'+contagemSufixo):'');
 }
 
 /* ── START ───────────────────────────────────── */
@@ -4026,6 +4027,22 @@ async function startInventory(forceNew){
   data=document.getElementById('inp-data').value;
   if(!data){showToast('⚠️ Selecione a data.');return;}
   if(!setor){showToast('⚠️ Selecione um setor.');return;}
+  if(forceNew){
+    const baseKeyChk=data+'_'+setor.replace(/\s+/g,'_')+'_'+nome.replace(/[^a-zA-Z0-9]/g,'_').substring(0,20).toLowerCase();
+    try{
+      const baseSnapChk=await db.ref('/inventario/'+baseKeyChk).get();
+      if(baseSnapChk.exists() && baseSnapChk.val() && baseSnapChk.val().status==='enviado'){
+        let nChk=2;
+        while((await db.ref('/inventario/'+baseKeyChk+'_v'+nChk).get()).exists()){ nChk++; }
+        contagemSufixo='v'+nChk;
+        showToast('📋 Já existe uma contagem enviada para este setor/data. Iniciando uma nova (v'+nChk+'), sem apagar a anterior.');
+      } else {
+        contagemSufixo='';
+      }
+    }catch(e){ contagemSufixo=''; }
+  } else {
+    contagemSufixo='';
+  }
 
   const btn=document.getElementById('btn-start');
   btn.disabled=true;
